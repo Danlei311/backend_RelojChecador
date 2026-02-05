@@ -1,0 +1,20 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (SÚPER IMPORTANTE)
+.env
+
+# Logs
+logs/
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Cachés de npm
+.npm
+
+# Carpetas de build (si las usas)
+dist/
+build/
