@@ -1,9 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { db } from './src/config/database.js';
 import timeRoutes from './src/routes/reloj.routes.js';
 import asistenciaRoutes from './src/routes/asistencia.routes.js';
+import authRoutes from './src/routes/auth.routes.js';
+import usuarioRoutes from './src/routes/usuarios.routes.js';
 
 
 // Configuración de variables de entorno
@@ -28,6 +29,8 @@ app.get('/', (req, res) => {
 // Rutas API
 app.use('/api', timeRoutes);
 app.use('/api',asistenciaRoutes)
+app.use('/api', authRoutes)
+app.use('/api', usuarioRoutes);
 
 // Servidor
 // QUE ACEPTE CONEXIONES EXTERNAS
