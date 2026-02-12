@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { db } from "../config/database.js";
+import {agregarTokenABlacklist} from "../middlewares/tokenBlacklist.js";
 
 export const login = async (req, res) => {
   const { usuario, password } = req.body;
@@ -74,6 +75,36 @@ export const login = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error en el servidor al iniciar sesión"
+    });
+  }
+};
+
+export const logout = async (req, res) => {
+  try {
+    const authHeader = req.headers["authorization"];
+
+    if (!authHeader) {
+      return res.status(400).json({
+        success: false,
+        message: "No se proporcionó token"
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // Agregamos el token a la blacklist
+    agregarTokenABlacklist(token);
+
+    res.status(200).json({
+      success: true,
+      message: "Sesión cerrada correctamente"
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Error al cerrar sesión"
     });
   }
 };

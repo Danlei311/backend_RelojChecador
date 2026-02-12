@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import {estaEnBlacklist} from "./tokenBlacklist.js";
 
 export const verificarToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -10,13 +11,19 @@ export const verificarToken = (req, res, next) => {
     });
   }
 
-  // El token viene como: "Bearer xxxxxx"
   const token = authHeader.split(" ")[1];
+
+  // Revisar si el token ya fue cerrado (logout)
+  if (estaEnBlacklist(token)) {
+    return res.status(401).json({
+      success: false,
+      message: "Sesión ya cerrada"
+    });
+  }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Guardamos los datos del usuario en la request (SESION)
     req.usuario = {
       idUsuario: decoded.idUsuario,
       usuario: decoded.usuario,
