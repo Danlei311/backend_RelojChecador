@@ -7,6 +7,7 @@ import authRoutes from './src/routes/auth.routes.js';
 import usuarioRoutes from './src/routes/usuarios.routes.js';
 import propiedadRoutes from './src/routes/propiedad.routes.js';
 import areaRoutes from './src/routes/area.routes.js';
+import horarioRoutes from './src/routes/horario.routes.js';
 
 
 // Configuración de variables de entorno
@@ -35,6 +36,7 @@ app.use('/api', authRoutes)
 app.use('/api', usuarioRoutes);
 app.use('/api', propiedadRoutes);
 app.use('/api', areaRoutes);
+app.use('/api', horarioRoutes);
 
 // Servidor
 // QUE ACEPTE CONEXIONES EXTERNAS
