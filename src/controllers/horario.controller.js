@@ -402,7 +402,7 @@ export const actualizarHorario = async (req, res) => {
         `, [
             usuario.idUsuario,
             mensajeAuditoria
-            ]);
+        ]);
 
 
         await connection.commit();
@@ -522,6 +522,13 @@ export const eliminarHorario = async (req, res) => {
             "UPDATE horarios SET estatus = FALSE WHERE idHorario = ?",
             [id]
         );
+
+        // 5.5️⃣ Desactivar días del horario
+        await connection.query(
+            "UPDATE horario_dias SET estatus = FALSE WHERE idHorario = ?",
+            [id]
+        );
+
 
         // 6️⃣ Auditoría
         const mensajeAuditoria =

@@ -311,6 +311,28 @@ export const eliminarArea = async (req, res) => {
             [id]
         );
 
+        // 2.5️⃣ Desactivar horarios dependientes
+        await connection.query(`
+            UPDATE horarios 
+            SET estatus = FALSE
+            WHERE idHorario IN (
+                SELECT idHorario
+                FROM propiedad_area_horario
+                WHERE idPropiedadArea = ?
+            )
+        `, [idPropiedadArea]);
+
+        // 2.6️⃣ Desactivar días del horario
+        await connection.query(`
+            UPDATE horario_dias
+            SET estatus = FALSE
+            WHERE idHorario IN (
+                SELECT idHorario
+                FROM propiedad_area_horario
+                WHERE idPropiedadArea = ?
+            )
+        `, [idPropiedadArea]);
+
         // Auditoría
         await connection.query(
             `

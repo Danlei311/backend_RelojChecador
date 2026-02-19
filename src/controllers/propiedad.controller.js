@@ -248,6 +248,27 @@ export const eliminarPropiedadCompleta = async (req, res) => {
                 "UPDATE propiedad_area SET estatus = FALSE WHERE idPropiedadArea = ?",
                 [pa.idPropiedadArea]
             );
+
+            await connection.query(`
+                UPDATE horarios 
+                SET estatus = FALSE
+                WHERE idHorario IN (
+                    SELECT idHorario
+                    FROM propiedad_area_horario
+                    WHERE idPropiedadArea = ?
+                )
+            `, [pa.idPropiedadArea]);
+
+            await connection.query(`
+                UPDATE horario_dias
+                SET estatus = FALSE
+                WHERE idHorario IN (
+                    SELECT idHorario
+                    FROM propiedad_area_horario
+                    WHERE idPropiedadArea = ?
+                )
+            `, [pa.idPropiedadArea]);
+
         }
 
         // 4️⃣ Auditoría corregida
@@ -329,6 +350,27 @@ export const eliminarSoloPropiedad = async (req, res) => {
                 "UPDATE propiedad_area SET estatus = FALSE WHERE idPropiedadArea = ?",
                 [pa.idPropiedadArea]
             );
+
+            await connection.query(`
+                UPDATE horarios 
+                SET estatus = FALSE
+                WHERE idHorario IN (
+                    SELECT idHorario
+                    FROM propiedad_area_horario
+                    WHERE idPropiedadArea = ?
+                )
+            `, [pa.idPropiedadArea]);
+
+            await connection.query(`
+                UPDATE horario_dias
+                SET estatus = FALSE
+                WHERE idHorario IN (
+                    SELECT idHorario
+                    FROM propiedad_area_horario
+                    WHERE idPropiedadArea = ?
+                )
+            `, [pa.idPropiedadArea]);
+
         }
 
         // 3️⃣ Auditoría corregida
