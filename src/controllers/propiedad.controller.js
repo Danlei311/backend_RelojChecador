@@ -61,14 +61,25 @@ export const crearPropiedad = async (req, res) => {
 // ?GET: Obtener todas las propiedades activas
 export const obtenerPropiedadesActivas = async (req, res) => {
     try {
-        const [propiedades] = await db.query(
-            `
-      SELECT idPropiedad, nombre, direccion, estatus
-      FROM propiedades
-      WHERE estatus = TRUE
-      ORDER BY idPropiedad ASC
-      `
-        );
+
+        let query = `
+            SELECT idPropiedad, nombre, direccion, estatus
+            FROM propiedades
+            WHERE estatus = TRUE
+        `;
+
+        let params = [];
+
+        // Si NO es ADMIN, filtrar por su propiedad
+        if (req.usuario.rol === "ADMIN_PROPIEDAD" ) {
+
+            query += " AND idPropiedad = ?";
+            params.push(req.usuario.idPropiedad);
+        }
+
+        query += " ORDER BY idPropiedad ASC";
+
+        const [propiedades] = await db.query(query, params);
 
         res.status(200).json({
             success: true,

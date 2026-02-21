@@ -16,6 +16,21 @@ export const crearArea = async (req, res) => {
             });
         }
 
+        // Validación de permisos
+        if (usuario.rol === "LECTURA") {
+            return res.status(403).json({
+                success: false,
+                message: "No tienes permisos para crear áreas"
+            });
+        }
+
+        if (usuario.rol === "ADMIN_PROPIEDAD" && idPropiedad != usuario.idPropiedad) {
+            return res.status(403).json({
+                success: false,
+                message: "No puedes crear áreas en otra propiedad"
+            });
+        }
+
         await connection.beginTransaction();
 
         // 1️⃣ Insertar área
@@ -89,8 +104,7 @@ export const crearArea = async (req, res) => {
 export const obtenerAreasActivas = async (req, res) => {
     try {
 
-        const [areas] = await db.query(
-            `
+        let query = `
             SELECT 
                 a.idArea,
                 a.nombreArea,
@@ -104,9 +118,19 @@ export const obtenerAreasActivas = async (req, res) => {
             WHERE a.estatus = TRUE
               AND pa.estatus = TRUE
               AND p.estatus = TRUE
-            ORDER BY p.nombre ASC, a.nombreArea ASC
-            `
-        );
+        `;
+
+        let params = [];
+
+        // FILTRO POR PROPIEDAD
+        if (req.usuario.rol === "ADMIN_PROPIEDAD" || req.usuario.rol === "LECTURA") {
+            query += " AND p.idPropiedad = ?";
+            params.push(req.usuario.idPropiedad);
+        }
+
+        query += " ORDER BY p.nombre ASC, a.nombreArea ASC";
+
+        const [areas] = await db.query(query, params);
 
         res.status(200).json({
             success: true,
@@ -127,8 +151,7 @@ export const obtenerAreaPorId = async (req, res) => {
 
     try {
 
-        const [rows] = await db.query(
-            `
+        let query = `
             SELECT 
                 a.idArea,
                 a.nombreArea,
@@ -143,10 +166,19 @@ export const obtenerAreaPorId = async (req, res) => {
             INNER JOIN propiedades p 
                 ON p.idPropiedad = pa.idPropiedad
             WHERE a.idArea = ?
-            LIMIT 1
-            `,
-            [id]
-        );
+        `;
+
+        let params = [id];
+
+        //FILTRO POR PROPIEDAD
+        if (req.usuario.rol === "ADMIN_PROPIEDAD") {
+            query += " AND p.idPropiedad = ?";
+            params.push(req.usuario.idPropiedad);
+        }
+
+        query += " LIMIT 1";
+
+        const [rows] = await db.query(query, params);
 
         if (rows.length === 0) {
             return res.status(404).json({
@@ -188,7 +220,13 @@ export const actualizarArea = async (req, res) => {
 
         // Verificar existencia
         const [existe] = await connection.query(
-            "SELECT * FROM areas WHERE idArea = ?",
+            `
+            SELECT p.idPropiedad
+            FROM areas a
+            INNER JOIN propiedad_area pa ON pa.idArea = a.idArea
+            INNER JOIN propiedades p ON p.idPropiedad = pa.idPropiedad
+            WHERE a.idArea = ?
+            `,
             [id]
         );
 
@@ -197,6 +235,24 @@ export const actualizarArea = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "Área no encontrada"
+            });
+        }
+
+        const propiedadDelArea = existe[0].idPropiedad;
+        // Validaciones
+        if (usuario.rol === "LECTURA") {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No tienes permisos para actualizar áreas"
+            });
+        }
+
+        if (usuario.rol === "ADMIN_PROPIEDAD" && propiedadDelArea != usuario.idPropiedad) {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No puedes modificar áreas de otra propiedad"
             });
         }
 
@@ -271,13 +327,23 @@ export const eliminarArea = async (req, res) => {
 
         await connection.beginTransaction();
 
+
+
         // Obtener idPropiedadArea
-        const [relacion] = await connection.query(
-            "SELECT idPropiedadArea FROM propiedad_area WHERE idArea = ?",
+        const [areaInfo] = await connection.query(
+            `
+            SELECT 
+                pa.idPropiedadArea,
+                p.idPropiedad
+            FROM areas a
+            INNER JOIN propiedad_area pa ON pa.idArea = a.idArea
+            INNER JOIN propiedades p ON p.idPropiedad = pa.idPropiedad
+            WHERE a.idArea = ?
+            `,
             [id]
         );
 
-        if (relacion.length === 0) {
+        if (areaInfo.length === 0) {
             await connection.rollback();
             return res.status(404).json({
                 success: false,
@@ -285,7 +351,26 @@ export const eliminarArea = async (req, res) => {
             });
         }
 
-        const idPropiedadArea = relacion[0].idPropiedadArea;
+        const idPropiedadArea = areaInfo[0].idPropiedadArea;
+        const propiedadDelArea = areaInfo[0].idPropiedad;
+
+        // Validaciones
+        if (usuario.rol === "LECTURA") {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No tienes permisos para eliminar áreas"
+            });
+        }
+
+        if (usuario.rol === "ADMIN_PROPIEDAD" && propiedadDelArea != usuario.idPropiedad) {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No puedes eliminar áreas de otra propiedad"
+            });
+        }
+
 
         // 1️⃣ Desvincular empleados
         await connection.query(

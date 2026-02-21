@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import {estaEnBlacklist} from "./tokenBlacklist.js";
+import { estaEnBlacklist } from "./tokenBlacklist.js";
 
 export const verificarToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -27,7 +27,8 @@ export const verificarToken = (req, res, next) => {
     req.usuario = {
       idUsuario: decoded.idUsuario,
       usuario: decoded.usuario,
-      rol: decoded.rol
+      rol: decoded.rol,
+      idPropiedad: decoded.idPropiedad
     };
 
     next();
@@ -40,11 +41,15 @@ export const verificarToken = (req, res, next) => {
 };
 
 export const soloAdmin = (req, res, next) => {
-  if (req.usuario.rol !== "ADMIN") {
-    return res.status(403).json({
-      success: false,
-      message: "No tienes permisos para esta acción"
-    });
+  if (
+    req.usuario.rol === "ADMIN" ||
+    req.usuario.rol === "ADMIN_PROPIEDAD"
+  ) {
+    return next();
   }
-  next();
+
+  return res.status(403).json({
+    success: false,
+    message: "No tienes permisos para esta acción"
+  });
 };

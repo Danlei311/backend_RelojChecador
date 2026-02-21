@@ -17,7 +17,7 @@ export const login = async (req, res) => {
 
     // Buscar usuario
     const [rows] = await db.query(
-      "SELECT idUsuario, usuario, contrasena, rol, estatus FROM usuarios WHERE usuario = ?",
+      "SELECT u.idUsuario, u.usuario, u.contrasena, u.rol, u.estatus, pa.idPropiedad FROM usuarios u JOIN empleados e ON u.idEmpleado = e.idEmpleado JOIN propiedad_area pa ON e.idPropiedadArea = pa.idPropiedadArea WHERE u.usuario = ?",
       [usuario]
     );
 
@@ -53,7 +53,8 @@ export const login = async (req, res) => {
       {
         idUsuario: user.idUsuario,
         usuario: user.usuario,
-        rol: user.rol
+        rol: user.rol,
+        idPropiedad: user.idPropiedad
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES || "8h" }

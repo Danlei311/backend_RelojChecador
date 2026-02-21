@@ -47,6 +47,14 @@ export const crearEmpleado = async (req, res) => {
             });
         }
 
+        // Validación de permisos
+        if (usuario.rol === "LECTURA") {
+            return res.status(403).json({
+                success: false,
+                message: "No tienes permisos para crear empleados"
+            });
+        }
+
         await connection.beginTransaction();
 
         // 1Obtener idPropiedad desde propiedad_area
@@ -73,6 +81,15 @@ export const crearEmpleado = async (req, res) => {
         }
 
         const { idPropiedad, nombrePropiedad, nombreArea } = propiedadArea[0];
+
+        // Validacion de permisos para ADMIN_PROPIEDAD
+        if (usuario.rol === "ADMIN_PROPIEDAD" && idPropiedad != usuario.idPropiedad) {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No puedes crear empleados en otra propiedad"
+            });
+        }
 
         // Generar PIN único
         const pin = await generarPinUnico(connection, idPropiedad);
@@ -173,7 +190,7 @@ export const obtenerEmpleadosActivos = async (req, res) => {
 
     try {
 
-        const [empleados] = await db.query(
+        let query =
             `
             SELECT 
                 e.idEmpleado,
@@ -216,9 +233,18 @@ export const obtenerEmpleadosActivos = async (req, res) => {
                 AND h.estatus = TRUE
 
             WHERE e.estatus = TRUE
-            ORDER BY e.nombre ASC
-            `
-        );
+            `;
+
+        let params = [];
+
+        if (req.usuario.rol === "ADMIN_PROPIEDAD" || req.usuario.rol === "LECTURA") {
+            query += " AND p.idPropiedad = ?";
+            params.push(req.usuario.idPropiedad);
+        }
+
+        query += " ORDER BY e.nombre ASC";
+
+        const [empleados] = await db.query(query, params);
 
         res.status(200).json({
             success: true,
@@ -240,8 +266,7 @@ export const obtenerAreasPropiedadParaEmpleado = async (req, res) => {
 
     try {
 
-        const [rows] = await db.query(
-            `
+        let query = `
             SELECT 
                 pa.idPropiedadArea,
                 a.nombreArea,
@@ -252,9 +277,18 @@ export const obtenerAreasPropiedadParaEmpleado = async (req, res) => {
             WHERE pa.estatus = TRUE
               AND a.estatus = TRUE
               AND p.estatus = TRUE
-            ORDER BY p.nombre ASC, a.nombreArea ASC
-            `
-        );
+        `;
+
+        let params = [];
+
+        if (req.usuario.rol === "ADMIN_PROPIEDAD") {
+            query += " AND p.idPropiedad = ?";
+            params.push(req.usuario.idPropiedad);
+        }
+
+        query += " ORDER BY p.nombre ASC, a.nombreArea ASC";
+
+        const [rows] = await db.query(query, params);
 
         res.status(200).json({
             success: true,
@@ -276,8 +310,7 @@ export const obtenerEmpleadoPorId = async (req, res) => {
 
     try {
 
-        const [rows] = await db.query(
-            `
+        let query = `
             SELECT 
                 e.idEmpleado,
                 e.nombre,
@@ -306,10 +339,18 @@ export const obtenerEmpleadoPorId = async (req, res) => {
                 ON a.idArea = pa.idArea
 
             WHERE e.idEmpleado = ?
-            LIMIT 1
-            `,
-            [id]
-        );
+        `;
+
+        let params = [id];
+
+        if (req.usuario.rol === "ADMIN_PROPIEDAD" || req.usuario.rol === "LECTURA") {
+            query += " AND p.idPropiedad = ?";
+            params.push(req.usuario.idPropiedad);
+        }
+
+        query += " LIMIT 1";
+
+        const [rows] = await db.query(query, params);
 
         if (rows.length === 0) {
             return res.status(404).json({
@@ -357,7 +398,13 @@ export const actualizarEmpleado = async (req, res) => {
         await connection.beginTransaction();
 
         const [existe] = await connection.query(
-            "SELECT * FROM empleados WHERE idEmpleado = ?",
+            `
+            SELECT p.idPropiedad
+            FROM empleados e
+            LEFT JOIN propiedad_area pa ON pa.idPropiedadArea = e.idPropiedadArea
+            LEFT JOIN propiedades p ON p.idPropiedad = pa.idPropiedad
+            WHERE e.idEmpleado = ?
+            `,
             [id]
         );
 
@@ -368,6 +415,56 @@ export const actualizarEmpleado = async (req, res) => {
                 message: "Empleado no encontrado"
             });
         }
+
+        const propiedadDelEmpleado = existe[0].idPropiedad;
+
+        if (usuario.rol === "LECTURA") {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No tienes permisos para actualizar empleados"
+            });
+        }
+
+        if (usuario.rol === "ADMIN_PROPIEDAD" && propiedadDelEmpleado != usuario.idPropiedad) {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No puedes modificar empleados de otra propiedad"
+            });
+        }
+
+        // Validar que el nuevo idPropiedadArea pertenezca a la propiedad correcta
+        const [areaNueva] = await connection.query(
+            `
+            SELECT p.idPropiedad
+            FROM propiedad_area pa
+            INNER JOIN propiedades p ON p.idPropiedad = pa.idPropiedad
+            WHERE pa.idPropiedadArea = ?
+            AND pa.estatus = TRUE
+            AND p.estatus = TRUE
+            `,
+            [idPropiedadArea]
+        );
+
+        if (areaNueva.length === 0) {
+            await connection.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Área inválida"
+            });
+        }
+
+        const propiedadDestino = areaNueva[0].idPropiedad;
+
+        if (usuario.rol === "ADMIN_PROPIEDAD" && propiedadDestino != usuario.idPropiedad) {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No puedes mover empleados a otra propiedad"
+            });
+        }
+
 
         await connection.query(
             `
@@ -467,7 +564,16 @@ export const eliminarEmpleado = async (req, res) => {
 
         // Verificar que exista
         const [empleado] = await connection.query(
-            "SELECT * FROM empleados WHERE idEmpleado = ?",
+            `
+            SELECT 
+                e.nombre,
+                e.apellidos,
+                p.idPropiedad
+            FROM empleados e
+            LEFT JOIN propiedad_area pa ON pa.idPropiedadArea = e.idPropiedadArea
+            LEFT JOIN propiedades p ON p.idPropiedad = pa.idPropiedad
+            WHERE e.idEmpleado = ?
+            `,
             [id]
         );
 
@@ -481,6 +587,24 @@ export const eliminarEmpleado = async (req, res) => {
 
         const empleadoData = empleado[0];
         const nombreCompleto = `${empleadoData.nombre} ${empleadoData.apellidos}`;
+        const propiedadDelEmpleado = empleado[0].idPropiedad;
+
+        if (usuario.rol === "LECTURA") {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No tienes permisos para eliminar empleados"
+            });
+        }
+
+        if (usuario.rol === "ADMIN_PROPIEDAD" && propiedadDelEmpleado != usuario.idPropiedad) {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "No puedes eliminar empleados de otra propiedad"
+            });
+        }
+
 
 
         // Desactivar empleado
