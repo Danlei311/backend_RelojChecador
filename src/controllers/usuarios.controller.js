@@ -33,6 +33,18 @@ export const crearUsuario = async (req, res) => {
       });
     }
 
+    // BLOQUEO DE JERARQUÍA
+    if (
+      usuarioLogeado.rol === "ADMIN_PROPIEDAD" &&
+      rol === "ADMIN"
+    ) {
+      await connection.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "No puedes crear usuarios ADMIN"
+      });
+    }
+
     await connection.beginTransaction();
 
     // Verificar que empleado exista y obtener propiedad
@@ -308,6 +320,30 @@ export const actualizarUsuario = async (req, res) => {
       });
     }
 
+    // ADMIN_PROPIEDAD no puede modificar ADMIN
+    if (
+      usuarioLogeado.rol === "ADMIN_PROPIEDAD" &&
+      usuarioDB.rolActual === "ADMIN"
+    ) {
+      await connection.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "No puedes modificar un usuario ADMIN"
+      });
+    }
+
+    // ADMIN_PROPIEDAD no puede convertir a ADMIN
+    if (
+      usuarioLogeado.rol === "ADMIN_PROPIEDAD" &&
+      rol === "ADMIN"
+    ) {
+      await connection.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "No puedes asignar rol ADMIN"
+      });
+    }
+
     if (
       usuarioLogeado.rol === "ADMIN_PROPIEDAD" &&
       usuarioDB.idPropiedad != usuarioLogeado.idPropiedad
@@ -389,6 +425,7 @@ export const eliminarUsuario = async (req, res) => {
       SELECT 
         u.idUsuario,
         u.usuario,
+        u.rol,
         p.idPropiedad
       FROM usuarios u
       LEFT JOIN empleados e ON e.idEmpleado = u.idEmpleado
@@ -413,6 +450,18 @@ export const eliminarUsuario = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "No tienes permisos para eliminar usuarios"
+      });
+    }
+
+    // ADMIN_PROPIEDAD no puede eliminar ADMIN
+    if (
+      usuarioLogeado.rol === "ADMIN_PROPIEDAD" &&
+      usuarioDB.rol === "ADMIN"
+    ) {
+      await connection.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "No puedes eliminar un usuario ADMIN"
       });
     }
 
