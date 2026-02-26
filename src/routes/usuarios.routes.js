@@ -2,7 +2,8 @@ import { Router } from "express";
 import { crearUsuario, obtenerUsuariosActivos,
     obtenerUsuarioPorId,
     actualizarUsuario,
-    eliminarUsuario
+    eliminarUsuario,
+    resetPasswordUsuario
  } from "../controllers/usuarios.controller.js";
 
 import { verificarToken, soloAdmin } from "../middlewares/auth.js";
@@ -16,5 +17,6 @@ router.get("/usuarios", verificarToken, obtenerUsuariosActivos);
 router.get("/usuarios/:id", verificarToken, obtenerUsuarioPorId);
 router.put("/usuarios/:id", verificarToken, soloAdmin, actualizarUsuario);
 router.delete("/usuarios/:id", verificarToken, soloAdmin, eliminarUsuario);
+router.post("/usuarios/:id/reset-password", verificarToken, resetPasswordUsuario);
 
 export default router;

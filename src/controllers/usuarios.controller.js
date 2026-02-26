@@ -519,3 +519,82 @@ export const eliminarUsuario = async (req, res) => {
     connection.release();
   }
 };
+
+export const resetPasswordUsuario = async (req, res) => {
+
+  const { id } = req.params;
+  const usuarioLogeado = req.usuario;
+  const connection = await db.getConnection();
+
+  try {
+
+    // SOLO ADMIN
+    if (usuarioLogeado.rol !== "ADMIN") {
+      return res.status(403).json({
+        success: false,
+        message: "Solo un ADMIN puede resetear contraseñas"
+      });
+    }
+
+    await connection.beginTransaction();
+
+    // Obtener usuario + empleado
+    const [rows] = await connection.query(`
+      SELECT 
+        u.idUsuario,
+        u.usuario,
+        e.idEmpleado,
+        e.nombre,
+        e.apellidos
+      FROM usuarios u
+      LEFT JOIN empleados e ON e.idEmpleado = u.idEmpleado
+      WHERE u.idUsuario = ?
+    `, [id]);
+
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Usuario no encontrado"
+      });
+    }
+
+    const usuarioDB = rows[0];
+
+    // Generar nueva contraseña
+    const nuevaContrasena = generarContrasenaAutomatica(usuarioDB);
+
+    const saltRounds = 10;
+    const hash = await bcrypt.hash(nuevaContrasena, saltRounds);
+
+    // Actualizar contraseña
+    await connection.query(`
+      UPDATE usuarios
+      SET contrasena = ?
+      WHERE idUsuario = ?
+    `, [hash, id]);
+
+    // Auditoría
+    await connection.query(`
+      INSERT INTO auditoria (idUsuario, accion, fecha, hora)
+      VALUES (?, ?, CURDATE(), CURTIME())
+    `, [
+      usuarioLogeado.idUsuario,
+      `${usuarioLogeado.usuario} reseteó la contraseña del usuario ${usuarioDB.usuario}`
+    ]);
+
+    await connection.commit();
+
+    res.status(200).json({
+      success: true,
+      nuevaContrasena
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).json({ success: false });
+  } finally {
+    connection.release();
+  }
+};
