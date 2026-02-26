@@ -35,7 +35,7 @@ export const crearUsuario = async (req, res) => {
 
     await connection.beginTransaction();
 
-    // 🔎 Verificar que empleado exista y obtener propiedad
+    // Verificar que empleado exista y obtener propiedad
     const [empleadoRows] = await connection.query(`
             SELECT 
                 e.idEmpleado,
@@ -59,7 +59,7 @@ export const crearUsuario = async (req, res) => {
 
     const empleado = empleadoRows[0];
 
-    // 🔐 Validación por propiedad
+    // Validación por propiedad
     if (
       usuarioLogeado.rol === "ADMIN_PROPIEDAD" &&
       empleado.idPropiedad != usuarioLogeado.idPropiedad
@@ -130,6 +130,7 @@ export const crearUsuario = async (req, res) => {
       usuario,
       rol,
       nombreCompleto: `${empleado.nombre} ${empleado.apellidos}`,
+      idPropiedad: empleado.idPropiedad,
       estatus: 1
     });
 
@@ -153,22 +154,29 @@ export const obtenerUsuariosActivos = async (req, res) => {
   try {
 
     let query = `
-            SELECT 
-                u.idUsuario,
-                u.usuario,
-                u.rol,
-                u.estatus,
-                CONCAT(e.nombre, ' ', e.apellidos) AS nombreCompleto,
-                p.idPropiedad
-            FROM usuarios u
-            LEFT JOIN empleados e ON e.idEmpleado = u.idEmpleado
-            LEFT JOIN propiedad_area pa ON pa.idPropiedadArea = e.idPropiedadArea
-            LEFT JOIN propiedades p ON p.idPropiedad = pa.idPropiedad
-            WHERE u.estatus = TRUE
-        `;
+      SELECT 
+        u.idUsuario,
+        u.usuario,
+        u.rol,
+        u.estatus,
+        CONCAT(e.nombre, ' ', e.apellidos) AS nombreCompleto,
+        p.idPropiedad
+      FROM usuarios u
+      LEFT JOIN empleados e ON e.idEmpleado = u.idEmpleado
+      LEFT JOIN propiedad_area pa ON pa.idPropiedadArea = e.idPropiedadArea
+      LEFT JOIN propiedades p ON p.idPropiedad = pa.idPropiedad
+      WHERE u.estatus = TRUE
+    `;
 
     let params = [];
 
+    // FILTRO MANUAL SOLO ADMIN
+    if (req.query.idPropiedad && req.usuario.rol === "ADMIN") {
+      query += " AND p.idPropiedad = ?";
+      params.push(req.query.idPropiedad);
+    }
+
+    // FILTRO AUTOMÁTICO POR ROL
     if (req.usuario.rol === "ADMIN_PROPIEDAD" || req.usuario.rol === "LECTURA") {
       query += " AND p.idPropiedad = ?";
       params.push(req.usuario.idPropiedad);
@@ -349,6 +357,7 @@ export const actualizarUsuario = async (req, res) => {
       usuario,
       rol,
       nombreCompleto: usuarioDB.nombreCompleto,
+      idPropiedad: usuarioDB.idPropiedad,
       estatus: 1
     });
 

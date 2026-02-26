@@ -104,6 +104,8 @@ export const crearArea = async (req, res) => {
 export const obtenerAreasActivas = async (req, res) => {
     try {
 
+        const { idPropiedad } = req.query; // 👈 NUEVO
+
         let query = `
             SELECT 
                 a.idArea,
@@ -122,10 +124,16 @@ export const obtenerAreasActivas = async (req, res) => {
 
         let params = [];
 
-        // FILTRO POR PROPIEDAD
+        // ADMIN_PROPIEDAD y LECTURA
         if (req.usuario.rol === "ADMIN_PROPIEDAD" || req.usuario.rol === "LECTURA") {
             query += " AND p.idPropiedad = ?";
             params.push(req.usuario.idPropiedad);
+        }
+
+        // FILTRO PARA ADMIN
+        if (req.usuario.rol === "ADMIN" && idPropiedad && idPropiedad !== "0") {
+            query += " AND p.idPropiedad = ?";
+            params.push(idPropiedad);
         }
 
         query += " ORDER BY p.nombre ASC, a.nombreArea ASC";

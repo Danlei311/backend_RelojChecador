@@ -138,6 +138,7 @@ export const crearEmpleado = async (req, res) => {
                 e.pin,
                 e.estatus,
                 pa.idPropiedadArea,
+                p.idPropiedad,
                 p.nombre AS nombrePropiedad,
                 a.nombreArea,
                 h.horaEntrada,
@@ -237,10 +238,17 @@ export const obtenerEmpleadosActivos = async (req, res) => {
 
         let params = [];
 
-        if (req.usuario.rol === "ADMIN_PROPIEDAD" || req.usuario.rol === "LECTURA") {
-            query += " AND p.idPropiedad = ?";
-            params.push(req.usuario.idPropiedad);
+        // PROPIEDAD BASE = siempre la del usuario
+        let idPropiedadBase = req.usuario.idPropiedad;
+
+        // Si es ADMIN y manda filtro manual, lo usamos
+        if (req.usuario.rol === "ADMIN" && req.query.idPropiedad) {
+            idPropiedadBase = req.query.idPropiedad;
         }
+
+        // SIEMPRE filtramos por una propiedad
+        query += " AND p.idPropiedad = ?";
+        params.push(idPropiedadBase);
 
         query += " ORDER BY e.nombre ASC";
 
@@ -510,6 +518,7 @@ export const actualizarEmpleado = async (req, res) => {
                 e.pin,
                 e.estatus,
                 pa.idPropiedadArea,
+                p.idPropiedad,
                 p.nombre AS nombrePropiedad,
                 a.nombreArea,
                 h.horaEntrada,

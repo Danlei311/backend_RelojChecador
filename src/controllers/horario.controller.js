@@ -133,6 +133,7 @@ export const crearHorario = async (req, res) => {
                 h.horaSalida,
                 h.toleranciaMinutos,
                 h.estatus,
+                p.idPropiedad,
                 p.nombre AS nombrePropiedad,
                 a.nombreArea,
                 pah.idPropiedadArea
@@ -210,6 +211,12 @@ export const obtenerHorariosActivos = async (req, res) => {
         if (req.usuario.rol === "ADMIN_PROPIEDAD" || req.usuario.rol === "LECTURA") {
             query += " AND p.idPropiedad = ?";
             params.push(req.usuario.idPropiedad);
+        }
+
+        // FILTRO MANUAL POR PROPIEDAD (solo para ADMIN)
+        if (req.query.idPropiedad && req.usuario.rol === "ADMIN") {
+            query += " AND p.idPropiedad = ?";
+            params.push(req.query.idPropiedad);
         }
 
         query += " ORDER BY p.nombre ASC, a.nombreArea ASC";
@@ -507,6 +514,7 @@ export const actualizarHorario = async (req, res) => {
                 h.toleranciaMinutos,
                 h.tipoHorario,
                 h.estatus,
+                p.idPropiedad,
                 p.nombre AS nombrePropiedad,
                 a.nombreArea
             FROM horarios h
