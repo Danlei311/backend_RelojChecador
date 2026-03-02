@@ -71,7 +71,7 @@ export const obtenerPropiedadesActivas = async (req, res) => {
         let params = [];
 
         // Si NO es ADMIN, filtrar por su propiedad
-        if (req.usuario.rol === "ADMIN_PROPIEDAD" ) {
+        if (req.usuario.rol === "ADMIN_PROPIEDAD" || req.usuario.rol === "LECTURA") {
 
             query += " AND idPropiedad = ?";
             params.push(req.usuario.idPropiedad);
@@ -210,7 +210,7 @@ export const eliminarPropiedadCompleta = async (req, res) => {
     try {
         await connection.beginTransaction();
 
-        // 1️⃣ Verificar existencia y obtener nombre
+        // Verificar existencia y obtener nombre
         const [propiedadRows] = await connection.query(
             "SELECT nombre FROM propiedades WHERE idPropiedad = ?",
             [id]
@@ -223,13 +223,13 @@ export const eliminarPropiedadCompleta = async (req, res) => {
 
         const nombrePropiedad = propiedadRows[0].nombre;
 
-        // 2️⃣ Desactivar propiedad
+        // Desactivar propiedad
         await connection.query(
             "UPDATE propiedades SET estatus = FALSE WHERE idPropiedad = ?",
             [id]
         );
 
-        // 3️⃣ Obtener relaciones
+        // Obtener relaciones
         const [propiedadAreas] = await connection.query(
             "SELECT idPropiedadArea FROM propiedad_area WHERE idPropiedad = ?",
             [id]
@@ -282,7 +282,7 @@ export const eliminarPropiedadCompleta = async (req, res) => {
 
         }
 
-        // 4️⃣ Auditoría corregida
+        // Auditoría corregida
         await connection.query(
             "INSERT INTO auditoria (idUsuario, accion, fecha, hora) VALUES (?, ?, CURDATE(), CURTIME())",
             [
@@ -293,7 +293,7 @@ export const eliminarPropiedadCompleta = async (req, res) => {
 
         await connection.commit();
 
-        // 🔥 Notificar por SSE
+        // Notificar por SSE
         notificarCambioPropiedades("propiedad-eliminada-completa", {
             idPropiedad: parseInt(id),
             estatus: 0
@@ -320,7 +320,7 @@ export const eliminarSoloPropiedad = async (req, res) => {
     try {
         await connection.beginTransaction();
 
-        // 1️⃣ Verificar existencia y obtener nombre
+        // Verificar existencia y obtener nombre
         const [propiedadRows] = await connection.query(
             "SELECT nombre FROM propiedades WHERE idPropiedad = ?",
             [id]
@@ -333,7 +333,7 @@ export const eliminarSoloPropiedad = async (req, res) => {
 
         const nombrePropiedad = propiedadRows[0].nombre;
 
-        // 2️⃣ Desactivar propiedad
+        // Desactivar propiedad
         await connection.query(
             "UPDATE propiedades SET estatus = FALSE WHERE idPropiedad = ?",
             [id]
@@ -346,7 +346,7 @@ export const eliminarSoloPropiedad = async (req, res) => {
 
         for (let pa of propiedadAreas) {
 
-            // ⚠ REQUIERE idPropiedadArea NULL permitido
+            // REQUIERE idPropiedadArea NULL permitido
             await connection.query(
                 "UPDATE empleados SET idPropiedadArea = NULL WHERE idPropiedadArea = ?",
                 [pa.idPropiedadArea]
@@ -384,7 +384,7 @@ export const eliminarSoloPropiedad = async (req, res) => {
 
         }
 
-        // 3️⃣ Auditoría corregida
+        // Auditoría corregida
         await connection.query(
             "INSERT INTO auditoria (idUsuario, accion, fecha, hora) VALUES (?, ?, CURDATE(), CURTIME())",
             [

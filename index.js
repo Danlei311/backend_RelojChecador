@@ -9,6 +9,7 @@ import propiedadRoutes from './src/routes/propiedad.routes.js';
 import areaRoutes from './src/routes/area.routes.js';
 import horarioRoutes from './src/routes/horario.routes.js';
 import empleadoRoutes from './src/routes/empleado.routes.js';
+import auditoriaRoutes from './src/routes/auditoria.routes.js';
 import './src/cron/faltas.cron.js';
 
 
@@ -40,6 +41,7 @@ app.use('/api', propiedadRoutes);
 app.use('/api', areaRoutes);
 app.use('/api', horarioRoutes);
 app.use('/api', empleadoRoutes);
+app.use('/api', auditoriaRoutes);
 
 // Servidor
 // QUE ACEPTE CONEXIONES EXTERNAS
