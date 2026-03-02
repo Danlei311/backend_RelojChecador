@@ -9,6 +9,7 @@ import propiedadRoutes from './src/routes/propiedad.routes.js';
 import areaRoutes from './src/routes/area.routes.js';
 import horarioRoutes from './src/routes/horario.routes.js';
 import empleadoRoutes from './src/routes/empleado.routes.js';
+import './src/cron/faltas.cron.js';
 
 
 // Configuración de variables de entorno

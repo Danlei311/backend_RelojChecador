@@ -623,14 +623,6 @@ export const eliminarHorario = async (req, res) => {
             });
         }
 
-        const idPropiedadArea = info[0].idPropiedadArea;
-
-        // Desvincular empleados (quedan sin asignación)
-        await connection.query(
-            "UPDATE empleados SET idPropiedadArea = NULL WHERE idPropiedadArea = ?",
-            [idPropiedadArea]
-        );
-
         // Desactivar relación propiedad_area_horario
         await connection.query(
             "UPDATE propiedad_area_horario SET estatus = FALSE WHERE idHorario = ?",
