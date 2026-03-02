@@ -238,17 +238,23 @@ export const obtenerEmpleadosActivos = async (req, res) => {
 
         let params = [];
 
-        // PROPIEDAD BASE = siempre la del usuario
-        let idPropiedadBase = req.usuario.idPropiedad;
-
-        // Si es ADMIN y manda filtro manual, lo usamos
-        if (req.usuario.rol === "ADMIN" && req.query.idPropiedad) {
-            idPropiedadBase = req.query.idPropiedad;
-        }
-
         // SIEMPRE filtramos por una propiedad
-        query += " AND p.idPropiedad = ?";
-        params.push(idPropiedadBase);
+        // CASO SIN ASIGNACIÓN → SOLO EMPLEADOS SIN PROPIEDAD
+        if (req.query.idPropiedad === "SIN_ASIGNACION") {
+
+            query += " AND e.idPropiedadArea IS NULL";
+
+        } else {
+
+            let idPropiedadBase = req.usuario.idPropiedad;
+
+            if (req.usuario.rol === "ADMIN" && req.query.idPropiedad) {
+                idPropiedadBase = req.query.idPropiedad;
+            }
+
+            query += " AND p.idPropiedad = ?";
+            params.push(idPropiedadBase);
+        }
 
         query += " ORDER BY e.nombre ASC";
 
