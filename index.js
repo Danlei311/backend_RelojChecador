@@ -11,6 +11,7 @@ import horarioRoutes from './src/routes/horario.routes.js';
 import empleadoRoutes from './src/routes/empleado.routes.js';
 import auditoriaRoutes from './src/routes/auditoria.routes.js';
 import incidenciasRoutes from './src/routes/incidencias.routes.js';
+import reportesRoutes from './src/routes/reportes.routes.js';
 import './src/cron/faltas.cron.js';
 
 
@@ -44,6 +45,7 @@ app.use('/api', horarioRoutes);
 app.use('/api', empleadoRoutes);
 app.use('/api', auditoriaRoutes);
 app.use('/api', incidenciasRoutes);
+app.use('/api', reportesRoutes);
 
 // Servidor
 // QUE ACEPTE CONEXIONES EXTERNAS

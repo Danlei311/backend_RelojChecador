@@ -672,3 +672,51 @@ export const eliminarEmpleado = async (req, res) => {
     }
 };
 
+// ?GET: Obtener empleados por propiedad
+export const obtenerEmpleadosPorPropiedad = async (req, res) => {
+
+    try {
+
+        const { idPropiedad } = req.params;
+
+        const query = `
+            SELECT 
+                e.idEmpleado,
+                e.nombre,
+                e.apellidos,
+                a.nombreArea
+            FROM empleados e
+
+            INNER JOIN propiedad_area pa
+                ON pa.idPropiedadArea = e.idPropiedadArea
+
+            INNER JOIN areas a
+                ON a.idArea = pa.idArea
+
+            WHERE pa.idPropiedad = ?
+            AND e.estatus = TRUE
+
+            ORDER BY e.nombre ASC
+        `;
+
+        const [empleados] = await db.query(query, [idPropiedad]);
+
+        res.status(200).json({
+            success: true,
+            total: empleados.length,
+            data: empleados
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Error al obtener empleados"
+        });
+
+    }
+
+};
+

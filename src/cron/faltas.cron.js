@@ -25,7 +25,15 @@ cron.schedule('* * * * *', async () => {
             AND pah.estatus = 1
             AND h.estatus = 1
             AND hd.estatus = 1
-            AND hd.diaSemana = UPPER(DAYNAME(CURDATE()))
+            AND hd.diaSemana = CASE DAYOFWEEK(CURDATE())
+                WHEN 1 THEN 'DOMINGO'
+                WHEN 2 THEN 'LUNES'
+                WHEN 3 THEN 'MARTES'
+                WHEN 4 THEN 'MIERCOLES'
+                WHEN 5 THEN 'JUEVES'
+                WHEN 6 THEN 'VIERNES'
+                WHEN 7 THEN 'SABADO'
+            END
             AND TIME(NOW()) > h.horaSalida
             AND NOT EXISTS (
                 SELECT 1

@@ -5,7 +5,8 @@ import {
     obtenerAreasPropiedadParaEmpleado,
     obtenerEmpleadoPorId,
     actualizarEmpleado,
-    eliminarEmpleado
+    eliminarEmpleado,
+    obtenerEmpleadosPorPropiedad
 } from "../controllers/empleado.controller.js";
 
 import { verificarToken, soloAdmin } from "../middlewares/auth.js";
@@ -21,6 +22,7 @@ router.get("/empleados/areas-propiedad", verificarToken, obtenerAreasPropiedadPa
 router.get("/empleados/:id", verificarToken, obtenerEmpleadoPorId);
 router.put("/empleados/:id", verificarToken, soloAdmin, actualizarEmpleado);
 router.delete("/empleados/:id", verificarToken, soloAdmin, eliminarEmpleado);
+router.get("/empleados/propiedad/:idPropiedad", verificarToken, obtenerEmpleadosPorPropiedad);
 
 
 export default router;
