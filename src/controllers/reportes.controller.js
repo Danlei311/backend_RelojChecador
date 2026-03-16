@@ -292,6 +292,21 @@ export const generarReportePDF = async (req, res) => {
 
         const nombrePropiedad = propiedad?.nombre ?? idPropiedad;
 
+        let nombreEmpleado = "Todos";
+
+        if (idEmpleado && idEmpleado !== "0") {
+
+            const [[empleado]] = await db.query(
+                `SELECT CONCAT(nombre,' ',apellidos) AS nombre
+                 FROM empleados
+                 WHERE idEmpleado = ?`,
+                [idEmpleado]
+            );
+
+            if (empleado) nombreEmpleado = empleado.nombre;
+
+        }
+
         const datos = await obtenerDatosReporte(req);
 
         const doc = new PDFDocument({
@@ -318,27 +333,17 @@ export const generarReportePDF = async (req, res) => {
 
         const infoX = doc.page.width - 260;
 
-        doc
-            .fontSize(10)
-            .text(`Fecha generación: ${hoy}`, infoX, 40, { width: 220 });
-
-        doc
-            .text(`Propiedad: ${nombrePropiedad}`, infoX, 55, { width: 220 });
-
-        doc
-            .text(`Empleado(s): ${idEmpleado === "0" ? "Todos" : idEmpleado}`, infoX, 70, { width: 220 });
-
-        doc
-            .text(`Rango: ${fechaInicio} - ${fechaFin}`, infoX, 85, { width: 220 });
+        doc.fontSize(10).text(`Fecha generación: ${hoy}`, infoX, 40, { width: 220 });
+        doc.text(`Propiedad: ${nombrePropiedad}`, infoX, 55, { width: 220 });
+        doc.text(`Empleado(s): ${nombreEmpleado}`, infoX, 70, { width: 220 });
+        doc.text(`Rango: ${fechaInicio} - ${fechaFin}`, infoX, 85, { width: 220 });
 
         doc.moveDown(4);
 
         doc
             .fontSize(18)
             .fillColor(azul)
-            .text("Reporte de Asistencias", 0, doc.y, {
-                align: "center"
-            });
+            .text("Reporte de Asistencias", 0, doc.y, { align: "center" });
 
         doc.moveDown(2);
 
@@ -357,20 +362,11 @@ export const generarReportePDF = async (req, res) => {
         ];
 
         let columnWidths = [
-            70,
-            200,
-            120,
-            120,
-            70,
-            90,
-            60,
-            110,
-            90,
-            90,
-            70
+            70, 200, 120, 120, 70, 90, 60, 110, 90, 90, 70
         ];
 
-        const printableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const printableWidth =
+            doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
         const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
 
@@ -388,55 +384,33 @@ export const generarReportePDF = async (req, res) => {
 
         const baseRowHeight = 26;
 
+        const dibujarHeaders = () => {
+
+            let x = startX;
+
+            headers.forEach((h, i) => {
+
+                doc.rect(x, y, columnWidths[i], baseRowHeight)
+                    .fillAndStroke(azul, "#000");
+
+                doc.fillColor("white")
+                    .fontSize(9)
+                    .text(h, x + 3, y + 7, {
+                        width: columnWidths[i] - 6,
+                        align: "center"
+                    });
+
+                x += columnWidths[i];
+
+            });
+
+            y += baseRowHeight;
+
+        };
+
         datos.forEach((r) => {
 
             const fecha = r.fecha.toISOString().slice(0, 10);
-
-            if (fecha !== fechaActual) {
-
-                if (fechaActual !== "") {
-                    doc.addPage();
-                    y = 40;
-                }
-
-                fechaActual = fecha;
-
-                doc
-                    .fontSize(13)
-                    .fillColor("black")
-                    .text(`Reporte del día: ${fecha}`, startX, y);
-
-                y = doc.y + 6;
-
-                let x = startX;
-
-                headers.forEach((h, i) => {
-
-                    doc
-                        .rect(x, y, columnWidths[i], baseRowHeight)
-                        .fillAndStroke(azul, "#000");
-
-                    doc
-                        .fillColor("white")
-                        .fontSize(9)
-                        .text(h, x + 3, y + 7, {
-                            width: columnWidths[i] - 6,
-                            align: "center"
-                        });
-
-                    x += columnWidths[i];
-
-                });
-
-                y += baseRowHeight;
-
-            }
-
-            let color = "#b7f7c4";
-
-            if (r.falta === "SI") color = "#ffb3b3";
-            else if (r.retardo === "SI") color = "#fff3b0";
-            else if (r.extemporaneo === "SI") color = "#b3d9ff";
 
             const row = [
                 r.numeroEmpleado,
@@ -454,6 +428,8 @@ export const generarReportePDF = async (req, res) => {
 
             let rowHeight = baseRowHeight;
 
+            doc.fontSize(9);
+
             row.forEach((cell, i) => {
 
                 const h = doc.heightOfString(String(cell ?? ""), {
@@ -464,16 +440,55 @@ export const generarReportePDF = async (req, res) => {
 
             });
 
+            if (fecha !== fechaActual) {
+
+                const alturaBloque = 40 + baseRowHeight + rowHeight;
+
+                if (y + alturaBloque > doc.page.height - 60) {
+                    doc.addPage();
+                    y = 40;
+                }
+
+                fechaActual = fecha;
+
+                y += 10;
+
+                doc
+                    .fontSize(13)
+                    .fillColor("black")
+                    .text(`Reporte del día: ${fecha}`, startX, y);
+
+                y = doc.y + 6;
+
+                dibujarHeaders();
+
+            }
+
+            // VERIFICAR ESPACIO ANTES DE DIBUJAR
+            if (y + rowHeight > doc.page.height - 60) {
+
+                doc.addPage();
+
+                y = 40;
+
+                dibujarHeaders();
+
+            }
+
+            let color = "#b7f7c4";
+
+            if (r.falta === "SI") color = "#ffb3b3";
+            else if (r.retardo === "SI") color = "#fff3b0";
+            else if (r.extemporaneo === "SI") color = "#b3d9ff";
+
             let x = startX;
 
             row.forEach((cell, i) => {
 
-                doc
-                    .rect(x, y, columnWidths[i], rowHeight)
+                doc.rect(x, y, columnWidths[i], rowHeight)
                     .fillAndStroke(color, "#cccccc");
 
-                doc
-                    .fillColor("black")
+                doc.fillColor("black")
                     .fontSize(9)
                     .text(String(cell ?? ""), x + 4, y + 6, {
                         width: columnWidths[i] - 8,
@@ -485,36 +500,6 @@ export const generarReportePDF = async (req, res) => {
             });
 
             y += rowHeight;
-
-            if (y > doc.page.height - 80) {
-
-                doc.addPage();
-
-                y = 40;
-
-                let x = startX;
-
-                headers.forEach((h, i) => {
-
-                    doc
-                        .rect(x, y, columnWidths[i], baseRowHeight)
-                        .fillAndStroke(azul, "#000");
-
-                    doc
-                        .fillColor("white")
-                        .fontSize(9)
-                        .text(h, x + 3, y + 7, {
-                            width: columnWidths[i] - 6,
-                            align: "center"
-                        });
-
-                    x += columnWidths[i];
-
-                });
-
-                y += baseRowHeight;
-
-            }
 
         });
 
@@ -530,28 +515,225 @@ export const generarReportePDF = async (req, res) => {
 
 };
 
+
 export const generarReporteExcel = async (req, res) => {
 
     try {
 
+        const { idPropiedad, idEmpleado, fechaInicio, fechaFin } = req.query;
+
+        const [[propiedad]] = await db.query(
+            `SELECT nombre FROM propiedades WHERE idPropiedad = ?`,
+            [idPropiedad]
+        );
+
+        const nombrePropiedad = propiedad?.nombre ?? idPropiedad;
+
+        let nombreEmpleado = "Todos";
+
+        if (idEmpleado && idEmpleado !== "0") {
+
+            const [[empleado]] = await db.query(
+                `SELECT CONCAT(nombre,' ',apellidos) AS nombre
+                 FROM empleados
+                 WHERE idEmpleado = ?`,
+                [idEmpleado]
+            );
+
+            if (empleado) nombreEmpleado = empleado.nombre;
+
+        }
+
         const datos = await obtenerDatosReporte(req);
 
         const workbook = new ExcelJS.Workbook();
-        const sheet = workbook.addWorksheet("Reporte");
+        const sheet = workbook.addWorksheet("Reporte Asistencias");
+        const logoId = workbook.addImage({
+            filename: path.join(__dirname, "../assets/logoPrueba.png"),
+            extension: "png"
+        });
 
-        sheet.columns = [
-            { header: "Fecha", key: "fecha", width: 15 },
-            { header: "NumEmpleado", key: "numeroEmpleado", width: 15 },
-            { header: "Nombre", key: "nombreEmpleado", width: 30 },
-            { header: "Puesto", key: "puesto", width: 20 },
-            { header: "Área", key: "area", width: 20 },
-            { header: "Retardo", key: "retardo", width: 10 },
-            { header: "Falta", key: "falta", width: 10 },
-            { header: "Hora Llegada", key: "horaLlegada", width: 15 },
-            { header: "Hora Salida", key: "horaSalida", width: 15 }
+        let rowIndex = 1;
+
+        /* ======== ENCABEZADO ======== */
+
+        sheet.addImage(logoId, {
+            tl: { col: 0, row: 0 },
+            ext: { width: 120, height: 60 }
+        });
+
+        sheet.getRow(1).height = 45;
+        sheet.getRow(2).height = 20;
+        sheet.getRow(3).height = 20;
+
+        sheet.mergeCells(`A${rowIndex}:K${rowIndex}`);
+        sheet.getCell(`A${rowIndex}`).value = "REPORTE DE ASISTENCIAS";
+        sheet.getCell(`A${rowIndex}`).font = { size: 16, bold: true };
+        sheet.getCell(`A${rowIndex}`).alignment = { horizontal: "center" };
+
+        rowIndex += 2;
+
+        sheet.getCell(`I${rowIndex}`).value = "Propiedad:";
+        sheet.getCell(`J${rowIndex}`).value = nombrePropiedad;
+
+        rowIndex++;
+
+        sheet.getCell(`I${rowIndex}`).value = "Empleado(s):";
+        sheet.getCell(`J${rowIndex}`).value = nombreEmpleado;
+
+        rowIndex++;
+
+        sheet.getCell(`I${rowIndex}`).value = "Rango:";
+        sheet.getCell(`J${rowIndex}`).value = `${fechaInicio} - ${fechaFin}`;
+
+        rowIndex += 2;
+
+        const headers = [
+            "Num Emp",
+            "Nombre",
+            "Puesto",
+            "Área",
+            "Retardo",
+            "Tiempo",
+            "Falta",
+            "Extemporáneo",
+            "Llegada",
+            "Salida",
+            "Foto"
         ];
 
-        datos.forEach(r => sheet.addRow(r));
+        let fechaActual = "";
+
+        const dibujarHeaders = () => {
+
+            const row = sheet.getRow(rowIndex);
+
+            headers.forEach((h, i) => {
+
+                const cell = row.getCell(i + 1);
+
+                cell.value = h;
+
+                cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "0B4F6C" }
+                };
+
+                cell.alignment = {
+                    horizontal: "center",
+                    vertical: "middle",
+                    wrapText: true
+                };
+
+                cell.border = {
+                    top: { style: "thin" },
+                    left: { style: "thin" },
+                    bottom: { style: "thin" },
+                    right: { style: "thin" }
+                };
+
+            });
+
+            rowIndex++;
+
+        };
+
+        datos.forEach((r) => {
+
+            const fecha = r.fecha.toISOString().slice(0, 10);
+
+            /* ===== SEPARADOR DE FECHA ===== */
+
+            if (fecha !== fechaActual) {
+
+                fechaActual = fecha;
+
+                sheet.mergeCells(`A${rowIndex}:K${rowIndex}`);
+
+                const cell = sheet.getCell(`A${rowIndex}`);
+
+                cell.value = `Reporte del día: ${fecha}`;
+                cell.font = { bold: true, size: 12 };
+
+                rowIndex++;
+
+                dibujarHeaders();
+
+            }
+
+            const row = sheet.getRow(rowIndex);
+
+            const values = [
+                r.numeroEmpleado,
+                r.nombreEmpleado,
+                r.puesto,
+                r.area,
+                r.retardo,
+                r.tiempoRetardo,
+                r.falta,
+                r.extemporaneo,
+                r.horaLlegada,
+                r.horaSalida,
+                r.fotografia ? "SI" : "NO"
+            ];
+
+            let color = "B7F7C4";
+
+            if (r.falta === "SI") color = "FFB3B3";
+            else if (r.retardo === "SI") color = "FFF3B0";
+            else if (r.extemporaneo === "SI") color = "B3D9FF";
+
+            values.forEach((v, i) => {
+
+                const cell = row.getCell(i + 1);
+
+                cell.value = v;
+
+                cell.alignment = {
+                    horizontal: "center",
+                    vertical: "middle",
+                    wrapText: true
+                };
+
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: color }
+                };
+
+                cell.border = {
+                    top: { style: "thin" },
+                    left: { style: "thin" },
+                    bottom: { style: "thin" },
+                    right: { style: "thin" }
+                };
+
+            });
+
+            rowIndex++;
+
+        });
+
+        /* ===== AUTO WIDTH ===== */
+
+        sheet.columns = [
+            { width: 15 },
+            { width: 30 },
+            { width: 20 },
+            { width: 20 },
+            { width: 10 },
+            { width: 15 },
+            { width: 10 },
+            { width: 15 },
+            { width: 15 },
+            { width: 15 },
+            { width: 10 }
+        ];
+
+        /* ===== DESCARGA ===== */
 
         res.setHeader(
             "Content-Type",
