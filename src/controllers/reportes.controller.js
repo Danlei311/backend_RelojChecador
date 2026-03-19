@@ -122,7 +122,8 @@ export const obtenerReportesAsistencia = async (req, res) => {
                 END AS horaSalida,
 
                 a.idAsistencia,
-                ah.fotografia
+                ah.fotografia,
+                0 AS justificada
 
             FROM asistencias_historial ah
 
@@ -184,7 +185,11 @@ export const obtenerReportesAsistencia = async (req, res) => {
                 'N/A' AS horaSalida,
 
                 NULL AS idAsistencia,
-                NULL AS fotografia
+                NULL AS fotografia,
+                CASE 
+                    WHEN i.justificada = 1 THEN 1
+                    ELSE 0
+                END AS justificada
 
             FROM incidencias i
 
@@ -477,7 +482,13 @@ export const generarReportePDF = async (req, res) => {
 
             let color = "#b7f7c4";
 
-            if (r.falta === "SI") color = "#ffb3b3";
+            if (r.falta === "SI") {
+                if (r.justificada) {
+                    color = "#ffcc80";
+                } else {
+                    color = "#ffb3b3";
+                }
+            }
             else if (r.retardo === "SI") color = "#fff3b0";
             else if (r.extemporaneo === "SI") color = "#b3d9ff";
 
@@ -682,7 +693,13 @@ export const generarReporteExcel = async (req, res) => {
 
             let color = "B7F7C4";
 
-            if (r.falta === "SI") color = "FFB3B3";
+            if (r.falta === "SI") {
+                if (r.justificada) {
+                    color = "FFCC80";
+                } else {
+                    color = "FFB3B3";
+                }
+            }
             else if (r.retardo === "SI") color = "FFF3B0";
             else if (r.extemporaneo === "SI") color = "B3D9FF";
 
@@ -862,7 +879,8 @@ const obtenerDatosReporte = async (req) => {
                 END AS horaSalida,
 
                 a.idAsistencia,
-                ah.fotografia
+                ah.fotografia,
+                NULL AS justificada
 
             FROM asistencias_historial ah
 
@@ -924,7 +942,8 @@ const obtenerDatosReporte = async (req) => {
                 'N/A' AS horaSalida,
 
                 NULL AS idAsistencia,
-                NULL AS fotografia
+                NULL AS fotografia,
+                i.justificada
 
             FROM incidencias i
 
