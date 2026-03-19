@@ -57,7 +57,7 @@ export const crearEmpleado = async (req, res) => {
 
         await connection.beginTransaction();
 
-        // 1Obtener idPropiedad desde propiedad_area
+        // Obtener idPropiedad desde propiedad_area
         const [propiedadArea] = await connection.query(
             `
             SELECT pa.idPropiedad, p.nombre AS nombrePropiedad, a.nombreArea

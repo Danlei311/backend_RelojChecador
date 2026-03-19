@@ -33,7 +33,7 @@ export const crearArea = async (req, res) => {
 
         await connection.beginTransaction();
 
-        // 1️⃣ Insertar área
+        // Insertar área
         const [result] = await connection.query(
             `
             INSERT INTO areas (nombreArea, descripcion, estatus)
@@ -44,7 +44,7 @@ export const crearArea = async (req, res) => {
 
         const idArea = result.insertId;
 
-        // 2️⃣ Insertar relación propiedad_area
+        // Insertar relación propiedad_area
         await connection.query(
             `
             INSERT INTO propiedad_area (idPropiedad, idArea, estatus)
@@ -62,7 +62,7 @@ export const crearArea = async (req, res) => {
         const nombrePropiedad = propiedad[0]?.nombre || "";
 
 
-        // 3️⃣ Auditoría
+        // Auditoría
         const accion = `${usuario.usuario} creó el área "${nombreArea}" en propiedad ID ${idPropiedad}`;
 
         await connection.query(
@@ -380,31 +380,31 @@ export const eliminarArea = async (req, res) => {
         }
 
 
-        // 1️⃣ Desvincular empleados
+        // Desvincular empleados
         await connection.query(
             "UPDATE empleados SET idPropiedadArea = NULL WHERE idPropiedadArea = ?",
             [idPropiedadArea]
         );
 
-        // 2️⃣ Desactivar horarios
+        // Desactivar horarios
         await connection.query(
             "UPDATE propiedad_area_horario SET estatus = FALSE WHERE idPropiedadArea = ?",
             [idPropiedadArea]
         );
 
-        // 3️⃣ Desactivar relación propiedad_area
+        // Desactivar relación propiedad_area
         await connection.query(
             "UPDATE propiedad_area SET estatus = FALSE WHERE idPropiedadArea = ?",
             [idPropiedadArea]
         );
 
-        // 4️⃣ Desactivar área
+        // Desactivar área
         await connection.query(
             "UPDATE areas SET estatus = FALSE WHERE idArea = ?",
             [id]
         );
 
-        // 2.5️⃣ Desactivar horarios dependientes
+        // 2. Desactivar horarios dependientes
         await connection.query(`
             UPDATE horarios 
             SET estatus = FALSE
@@ -415,7 +415,7 @@ export const eliminarArea = async (req, res) => {
             )
         `, [idPropiedadArea]);
 
-        // 2.6️⃣ Desactivar días del horario
+        // 2. Desactivar días del horario
         await connection.query(`
             UPDATE horario_dias
             SET estatus = FALSE
