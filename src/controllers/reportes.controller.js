@@ -330,9 +330,9 @@ export const generarReportePDF = async (req, res) => {
 
         const azul = "#0B4F6C";
 
-        const logoPath = path.join(__dirname, "../assets/logoPrueba.png");
+        const logoPath = path.join(__dirname, "../assets/LogoMP_Azul.png");
 
-        doc.image(logoPath, 40, 35, { width: 60 });
+        doc.image(logoPath, 40, 35, { width: 200 });
 
         const hoy = new Date().toISOString().slice(0, 10);
 
@@ -560,7 +560,7 @@ export const generarReporteExcel = async (req, res) => {
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet("Reporte Asistencias");
         const logoId = workbook.addImage({
-            filename: path.join(__dirname, "../assets/logoPrueba.png"),
+            filename: path.join(__dirname, "../assets/LogoMP_Azul.png"),
             extension: "png"
         });
 
@@ -570,7 +570,7 @@ export const generarReporteExcel = async (req, res) => {
 
         sheet.addImage(logoId, {
             tl: { col: 0, row: 0 },
-            ext: { width: 120, height: 60 }
+            ext: { width: 200, height: 100 }
         });
 
         sheet.getRow(1).height = 45;
