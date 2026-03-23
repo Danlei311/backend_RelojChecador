@@ -12,6 +12,7 @@ import empleadoRoutes from './src/routes/empleado.routes.js';
 import auditoriaRoutes from './src/routes/auditoria.routes.js';
 import incidenciasRoutes from './src/routes/incidencias.routes.js';
 import reportesRoutes from './src/routes/reportes.routes.js';
+import { crearSuperUsuarioSiNoExiste } from './src/utils/seed.js';
 import './src/cron/faltas.cron.js';
 
 
@@ -49,6 +50,18 @@ app.use('/api', reportesRoutes);
 
 // Servidor
 // QUE ACEPTE CONEXIONES EXTERNAS
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
-});
+const startServer = async () => {
+    try {
+
+        await crearSuperUsuarioSiNoExiste(); // 🔥 AUTO-SEED
+
+        app.listen(PORT, "0.0.0.0", () => {
+            console.log(`Servidor corriendo en puerto ${PORT}`);
+        });
+
+    } catch (error) {
+        console.error("Error al iniciar servidor:", error);
+    }
+};
+
+startServer();
