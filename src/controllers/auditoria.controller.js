@@ -4,7 +4,7 @@ export const obtenerAuditoria = async (req, res) => {
 
     try {
 
-        const { idPropiedad, fecha } = req.query;
+        const { idPropiedad, fecha, fechaInicio, fechaFin } = req.query;
         const usuario = req.usuario;
 
         let query = `
@@ -41,24 +41,34 @@ export const obtenerAuditoria = async (req, res) => {
         }
 
         // FILTRO DE FECHA
-        let filtroFecha = "CURDATE()"; // default HOY
 
-        if (fecha === "HOY") {
-            query += " AND DATE(a.fecha) = CURDATE()";
-        }
-        else if (fecha === "AYER") {
-            query += " AND DATE(a.fecha) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)";
-        }
-        else if (fecha === "SEMANA") {
-            query += " AND DATE(a.fecha) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
-        }
-        else if (fecha === "MES") {
-            query += " AND DATE(a.fecha) >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)";
+        if (fechaInicio && fechaFin) {
+
+            query += " AND DATE(a.fecha) BETWEEN ? AND ?";
+            params.push(fechaInicio, fechaFin);
+
+        } else {
+            if (fecha === "HOY") {
+                query += " AND DATE(a.fecha) = CURDATE()";
+            }
+            else if (fecha === "AYER") {
+                query += " AND DATE(a.fecha) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)";
+            }
+            else if (fecha === "SEMANA") {
+                query += " AND DATE(a.fecha) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+            }
+            else if (fecha === "MES") {
+                query += " AND DATE(a.fecha) >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)";
+            }
+            else if (fecha === "DOS_MESES") {
+                query += " AND DATE(a.fecha) >= DATE_SUB(CURDATE(), INTERVAL 2 MONTH)";
+            }
+            else if (fecha === "TODOS") {
+                query += " AND a.fecha >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)";
+            }
+
         }
 
-        if (!fecha) {
-            query += ` AND a.fecha = DATE(${filtroFecha})`;
-        }
 
         query += " ORDER BY a.fecha DESC, a.hora DESC";
 

@@ -104,6 +104,16 @@ export const obtenerIncidencias = async (req, res) => {
             query += " AND i.fecha >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
 
         }
+        else if (fecha === "MES") {
+
+            query += " AND i.fecha >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)";
+
+        }
+        else if (fecha === "DOS_MESES") {
+
+            query += " AND i.fecha >= DATE_SUB(CURDATE(), INTERVAL 2 MONTH)";
+
+        }
 
         query += " ORDER BY i.fecha DESC";
 
