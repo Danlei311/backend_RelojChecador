@@ -23,6 +23,49 @@ const generarPinUnico = async (connection, idPropiedad) => {
     return pin;
 };
 
+// Generar número de empleado único (CORREGIDO)
+const generarNumeroEmpleado = async (connection, idPropiedadArea, idEmpleado) => {
+    // Obtener el nombre de la propiedad y el nombre del área asociada al idPropiedadArea
+    const [propiedadArea] = await connection.query(
+        `SELECT pa.idPropiedad, p.nombre AS nombrePropiedad, a.nombreArea
+         FROM propiedad_area pa
+         INNER JOIN propiedades p ON p.idPropiedad = pa.idPropiedad
+         INNER JOIN areas a ON a.idArea = pa.idArea
+         WHERE pa.idPropiedadArea = ?`,
+        [idPropiedadArea]
+    );
+
+    if (propiedadArea.length === 0) {
+        throw new Error("Área-Propiedad no válida");
+    }
+
+    const { nombrePropiedad, nombreArea } = propiedadArea[0];
+
+    // Obtener la abreviatura de la propiedad (primer carácter)
+    const propiedadAbrev = nombrePropiedad.charAt(0).toUpperCase();
+    
+    // Obtener las dos primeras letras del área
+    const areaAbrev = nombreArea.substring(0, 2).toUpperCase();
+
+    let numeroEmpleado;
+
+    if (idEmpleado === null) {
+        // Para nuevo empleado: obtener el último idEmpleado global y sumar 1
+        const [empleado] = await connection.query(
+            "SELECT idEmpleado FROM empleados ORDER BY idEmpleado DESC LIMIT 1"
+        );
+        
+        const ultimoId = empleado.length > 0 ? empleado[0].idEmpleado : 0;
+        const consecutivo = ultimoId + 1;
+        
+        numeroEmpleado = `${propiedadAbrev}${areaAbrev}-${consecutivo.toString().padStart(3, '0')}`;
+    } else {
+        // Para actualización: usar el mismo idEmpleado
+        numeroEmpleado = `${propiedadAbrev}${areaAbrev}-${idEmpleado.toString().padStart(3, '0')}`;
+    }
+
+    return numeroEmpleado;
+};
 
 // CREAR EMPLEADO
 export const crearEmpleado = async (req, res) => {
@@ -30,7 +73,6 @@ export const crearEmpleado = async (req, res) => {
     const {
         nombre,
         apellidos,
-        numeroEmpleado,
         puesto,
         idPropiedadArea
     } = req.body;
@@ -82,6 +124,9 @@ export const crearEmpleado = async (req, res) => {
 
         const { idPropiedad, nombrePropiedad, nombreArea } = propiedadArea[0];
 
+        // Obtener número de empleado por propiedad
+        const numeroEmpleado = await generarNumeroEmpleado(connection, idPropiedadArea, null);
+
         // Validacion de permisos para ADMIN_PROPIEDAD
         if (usuario.rol === "ADMIN_PROPIEDAD" && idPropiedad != usuario.idPropiedad) {
             await connection.rollback();
@@ -104,7 +149,7 @@ export const crearEmpleado = async (req, res) => {
             [
                 nombre,
                 apellidos,
-                numeroEmpleado || null,
+                numeroEmpleado,
                 puesto || null,
                 pin,
                 idPropiedadArea
@@ -392,7 +437,6 @@ export const actualizarEmpleado = async (req, res) => {
     const {
         nombre,
         apellidos,
-        numeroEmpleado,
         puesto,
         idPropiedadArea
     } = req.body;
@@ -479,21 +523,21 @@ export const actualizarEmpleado = async (req, res) => {
             });
         }
 
+        // Inicializa numeroEmpleado
+        let numeroEmpleado = await generarNumeroEmpleado(connection, idPropiedadArea, id);
+       
 
+        // Actualizar empleado solo si el número de empleado cambió o si se actualizan otros campos
         await connection.query(
             `
-            UPDATE empleados
-            SET nombre = ?,
-                apellidos = ?,
-                numeroEmpleado = ?,
-                puesto = ?,
-                idPropiedadArea = ?
-            WHERE idEmpleado = ?
+                UPDATE empleados
+                SET nombre = ?, apellidos = ?, numeroEmpleado = ?, puesto = ?, idPropiedadArea = ?
+                WHERE idEmpleado = ?
             `,
             [
                 nombre,
                 apellidos,
-                numeroEmpleado || null,
+                numeroEmpleado,  // Solo actualizar el número de empleado si cambió
                 puesto || null,
                 idPropiedadArea,
                 id
