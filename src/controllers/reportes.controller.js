@@ -95,6 +95,7 @@ export const obtenerReportesAsistencia = async (req, res) => {
                 ah.nombreEmpleado,
                 e.puesto,
                 ah.area,
+                e.idEmpleado,
 
                 CASE 
                     WHEN i.tipoIncidencia = 'RETARDO' THEN 'SI'
@@ -123,7 +124,10 @@ export const obtenerReportesAsistencia = async (req, res) => {
 
                 a.idAsistencia,
                 ah.fotografia,
-                0 AS justificada
+                CASE 
+                    WHEN i.tipoIncidencia = 'RETARDO' THEN COALESCE(i.justificada, 0)
+                    ELSE 0
+                END AS justificada
 
             FROM asistencias_historial ah
 
@@ -176,6 +180,7 @@ export const obtenerReportesAsistencia = async (req, res) => {
                 CONCAT(e.nombre,' ',e.apellidos) AS nombreEmpleado,
                 e.puesto,
                 ar.nombreArea AS area,
+                e.idEmpleado,
 
                 'NO' AS retardo,
                 'N/A' AS tiempoRetardo,
@@ -361,13 +366,14 @@ export const generarReportePDF = async (req, res) => {
             "Tiempo",
             "Falta",
             "Extemporáneo",
+            "Justificada",
             "Llegada",
             "Salida",
             "Foto"
         ];
 
         let columnWidths = [
-            70, 200, 120, 120, 70, 90, 60, 110, 90, 90, 70
+            70, 200, 120, 120, 70, 90, 60, 110, 70, 90, 90, 70
         ];
 
         const printableWidth =
@@ -426,9 +432,10 @@ export const generarReportePDF = async (req, res) => {
                 r.tiempoRetardo,
                 r.falta,
                 r.extemporaneo,
+                r.justificada ? "Sí" : "No", // Justificada
                 r.horaLlegada,
                 r.horaSalida,
-                r.fotografia ? "SI" : "NO"
+                r.fotografia ? "Sí" : "No"
             ];
 
             let rowHeight = baseRowHeight;
@@ -480,17 +487,23 @@ export const generarReportePDF = async (req, res) => {
 
             }
 
-            let color = "#b7f7c4";
+            let color = "#b7f7c4"; // Verde: Asistencia correcta
 
             if (r.falta === "SI") {
-                if (r.justificada) {
-                    color = "#ffcc80";
+                if (r.justificada === 1) {
+                    color = "#ffcc80"; // Naranja: Falta justificada
                 } else {
-                    color = "#ffb3b3";
+                    color = "#ffb3b3"; // Rojo: Falta no justificada
                 }
+            } else if (r.retardo === "SI") {
+                if (r.justificada === 1) {
+                    color = "#b7f7c4"; // Verde: Retardo justificado
+                } else {
+                    color = "#fff3b0"; // Amarillo: Retardo no justificado
+                }
+            } else if (r.extemporaneo === "SI") {
+                color = "#b3d9ff"; // Azul: Extemporáneo
             }
-            else if (r.retardo === "SI") color = "#fff3b0";
-            else if (r.extemporaneo === "SI") color = "#b3d9ff";
 
             let x = startX;
 
@@ -577,7 +590,7 @@ export const generarReporteExcel = async (req, res) => {
         sheet.getRow(2).height = 20;
         sheet.getRow(3).height = 20;
 
-        sheet.mergeCells(`A${rowIndex}:K${rowIndex}`);
+        sheet.mergeCells(`A${rowIndex}:L${rowIndex}`);
         sheet.getCell(`A${rowIndex}`).value = "REPORTE DE ASISTENCIAS";
         sheet.getCell(`A${rowIndex}`).font = { size: 16, bold: true };
         sheet.getCell(`A${rowIndex}`).alignment = { horizontal: "center" };
@@ -608,6 +621,7 @@ export const generarReporteExcel = async (req, res) => {
             "Tiempo",
             "Falta",
             "Extemporáneo",
+            "Justificada",
             "Llegada",
             "Salida",
             "Foto"
@@ -662,7 +676,7 @@ export const generarReporteExcel = async (req, res) => {
 
                 fechaActual = fecha;
 
-                sheet.mergeCells(`A${rowIndex}:K${rowIndex}`);
+                sheet.mergeCells(`A${rowIndex}:L${rowIndex}`);
 
                 const cell = sheet.getCell(`A${rowIndex}`);
 
@@ -686,22 +700,29 @@ export const generarReporteExcel = async (req, res) => {
                 r.tiempoRetardo,
                 r.falta,
                 r.extemporaneo,
+                r.justificada ? "Sí" : "No",
                 r.horaLlegada,
                 r.horaSalida,
-                r.fotografia ? "SI" : "NO"
+                r.fotografia ? "Sí" : "No"
             ];
 
-            let color = "B7F7C4";
+            let color = "#b7f7c4"; // Verde: Asistencia correcta
 
             if (r.falta === "SI") {
-                if (r.justificada) {
-                    color = "FFCC80";
+                if (r.justificada === 1) {
+                    color = "#ffcc80"; // Naranja: Falta justificada
                 } else {
-                    color = "FFB3B3";
+                    color = "#ffb3b3"; // Rojo: Falta no justificada
                 }
+            } else if (r.retardo === "SI") {
+                if (r.justificada === 1) {
+                    color = "#b7f7c4"; // Verde: Retardo justificado
+                } else {
+                    color = "#fff3b0"; // Amarillo: Retardo no justificado
+                }
+            } else if (r.extemporaneo === "SI") {
+                color = "#b3d9ff"; // Azul: Extemporáneo
             }
-            else if (r.retardo === "SI") color = "FFF3B0";
-            else if (r.extemporaneo === "SI") color = "B3D9FF";
 
             values.forEach((v, i) => {
 
@@ -715,10 +736,12 @@ export const generarReporteExcel = async (req, res) => {
                     wrapText: true
                 };
 
+                const excelColor = color.startsWith('#') ? 'FF' + color.substring(1) : color;
+
                 cell.fill = {
                     type: "pattern",
                     pattern: "solid",
-                    fgColor: { argb: color }
+                    fgColor: { argb: excelColor }
                 };
 
                 cell.border = {
@@ -737,17 +760,18 @@ export const generarReporteExcel = async (req, res) => {
         /* ===== AUTO WIDTH ===== */
 
         sheet.columns = [
-            { width: 15 },
-            { width: 30 },
-            { width: 20 },
-            { width: 20 },
-            { width: 10 },
-            { width: 15 },
-            { width: 10 },
-            { width: 15 },
-            { width: 15 },
-            { width: 15 },
-            { width: 10 }
+            { width: 15 },  // Num Emp
+            { width: 30 },  // Nombre
+            { width: 20 },  // Puesto
+            { width: 20 },  // Área
+            { width: 10 },  // Retardo
+            { width: 15 },  // Tiempo
+            { width: 10 },  // Falta
+            { width: 15 },  // Extemporáneo
+            { width: 12 },  // Justificada
+            { width: 15 },  // Llegada
+            { width: 15 },  // Salida
+            { width: 10 }   // Foto
         ];
 
         /* ===== DESCARGA ===== */
@@ -852,6 +876,7 @@ const obtenerDatosReporte = async (req) => {
                 ah.nombreEmpleado,
                 e.puesto,
                 ah.area,
+                e.idEmpleado,
 
                 CASE 
                     WHEN i.tipoIncidencia = 'RETARDO' THEN 'SI'
@@ -880,7 +905,10 @@ const obtenerDatosReporte = async (req) => {
 
                 a.idAsistencia,
                 ah.fotografia,
-                NULL AS justificada
+                CASE 
+                    WHEN i.tipoIncidencia = 'RETARDO' THEN COALESCE(i.justificada, 0)
+                    ELSE 0
+                END AS justificada
 
             FROM asistencias_historial ah
 
@@ -933,6 +961,7 @@ const obtenerDatosReporte = async (req) => {
                 CONCAT(e.nombre,' ',e.apellidos) AS nombreEmpleado,
                 e.puesto,
                 ar.nombreArea AS area,
+                e.idEmpleado,
 
                 'NO' AS retardo,
                 'N/A' AS tiempoRetardo,
@@ -975,4 +1004,44 @@ const obtenerDatosReporte = async (req) => {
 
     return rows;
 
+};
+
+export const obtenerFotoSalida = async (req, res) => {
+
+    const { empleado, fecha } = req.query;
+
+    try {
+        const [rows] = await db.query(`
+            SELECT fotografia
+            FROM asistencias
+            WHERE idEmpleado = ?
+            AND fecha = ?
+            AND tipoRegistro = 'SALIDA'
+            LIMIT 1
+        `, [empleado, fecha]);
+
+        if (rows.length === 0 || !rows[0].fotografia) {
+            return res.status(404).json({
+                success: false,
+                message: "Foto de salida no encontrada"
+            });
+        }
+
+        const ruta = rows[0].fotografia;
+
+        if (!fs.existsSync(ruta)) {
+            return res.status(404).json({
+                success: false,
+                message: "Archivo no existe en servidor"
+            });
+        }
+
+        return res.sendFile(path.resolve(ruta));
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false
+        });
+    }
 };
