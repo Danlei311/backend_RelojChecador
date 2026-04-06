@@ -182,6 +182,10 @@ export const obtenerUsuariosActivos = async (req, res) => {
 
     let params = [];
 
+    // EXCLUIR SUPERUSUARIO POR NOMBRE DE USUARIO
+    query += ` AND u.usuario != ?`;
+    params.push(process.env.DEFAULT_ADMIN_USER);
+
     // FILTRO MANUAL SOLO ADMIN
     if (req.query.idPropiedad && req.usuario.rol === "ADMIN") {
       query += " AND p.idPropiedad = ?";

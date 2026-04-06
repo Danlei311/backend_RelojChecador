@@ -283,6 +283,10 @@ export const obtenerEmpleadosActivos = async (req, res) => {
 
         let params = [];
 
+        // EXCLUIR SUPERUSUARIO POR PIN
+        query += ` AND e.pin != ?`;
+        params.push(process.env.DEFAULT_ADMIN_PIN);
+
         // SIEMPRE filtramos por una propiedad
         // CASO SIN ASIGNACIÓN → SOLO EMPLEADOS SIN PROPIEDAD
         if (req.query.idPropiedad === "SIN_ASIGNACION") {
