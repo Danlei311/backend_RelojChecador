@@ -6,16 +6,20 @@ import { notificarCambioPropiedades } from "../sse/propiedad.sse.js";
 export const crearPropiedad = async (req, res) => {
     const { nombre, direccion } = req.body;
     const usuario = req.usuario;
+    const connection = await db.getConnection();
 
     try {
         if (!nombre || !direccion) {
+            connection.release();
             return res.status(400).json({
                 success: false,
                 message: "Nombre y dirección son obligatorios"
             });
         }
 
-        const [result] = await db.query(
+        await connection.beginTransaction();
+
+        const [result] = await connection.query(
             `
       INSERT INTO propiedades (nombre, direccion, estatus)
       VALUES (?, ?, TRUE)
@@ -28,13 +32,15 @@ export const crearPropiedad = async (req, res) => {
         // REGISTRO EN AUDITORÍA
         const accion = `${usuario.usuario} creó la propiedad "${nombre}" (ID: ${idPropiedad})`;
 
-        await db.query(
+        await connection.query(
             `
-      INSERT INTO auditoria (idUsuario, accion, fecha, hora)
-      VALUES (?, ?, CURDATE(), CURTIME())
-      `,
+            INSERT INTO auditoria (idUsuario, accion, fecha, hora)
+            VALUES (?, ?, CURDATE(), CURTIME())
+            `,
             [usuario.idUsuario, accion]
         );
+
+        await connection.commit();
 
         notificarCambioPropiedades("propiedad-creada", {
             idPropiedad,
@@ -50,11 +56,14 @@ export const crearPropiedad = async (req, res) => {
         });
 
     } catch (error) {
+        await connection.rollback();
         console.error(error);
         res.status(500).json({
             success: false,
             message: "Error al crear la propiedad"
         });
+    } finally {
+        connection.release();
     }
 };
 
@@ -136,23 +145,29 @@ export const actualizarPropiedad = async (req, res) => {
     const { id } = req.params;
     const { nombre, direccion } = req.body;
     const usuario = req.usuario;
+    const connection = await db.getConnection();
 
     try {
 
         if (!nombre || !direccion) {
+            connection.release();
             return res.status(400).json({
                 success: false,
                 message: "Nombre y dirección son obligatorios"
             });
         }
 
+        await connection.beginTransaction();
+
         // Verificar que exista
-        const [existe] = await db.query(
+        const [existe] = await connection.query(
             `SELECT * FROM propiedades WHERE idPropiedad = ?`,
             [id]
         );
 
         if (existe.length === 0) {
+            await connection.rollback();
+            connection.release();
             return res.status(404).json({
                 success: false,
                 message: "Propiedad no encontrada"
@@ -160,7 +175,7 @@ export const actualizarPropiedad = async (req, res) => {
         }
 
         // Actualizar
-        await db.query(
+        await connection.query(
             `
             UPDATE propiedades
             SET nombre = ?, direccion = ?
@@ -172,13 +187,15 @@ export const actualizarPropiedad = async (req, res) => {
         // AUDITORÍA
         const accion = `${usuario.usuario} actualizó la propiedad "${nombre}" (ID: ${id})`;
 
-        await db.query(
+        await connection.query(
             `
             INSERT INTO auditoria (idUsuario, accion, fecha, hora)
             VALUES (?, ?, CURDATE(), CURTIME())
             `,
             [usuario.idUsuario, accion]
         );
+
+        await connection.commit();
 
         // Notificar por SSE
         notificarCambioPropiedades("propiedad-actualizada", {
@@ -194,11 +211,14 @@ export const actualizarPropiedad = async (req, res) => {
         });
 
     } catch (error) {
+        await connection.rollback();
         console.error(error);
         res.status(500).json({
             success: false,
             message: "Error al actualizar la propiedad"
         });
+    } finally {
+        connection.release();
     }
 };
 
