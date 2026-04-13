@@ -6,8 +6,8 @@ import path from "path";
 // Metodos del reloj checador
 
 // Validar PIN de empleado
-async function obtenerEmpleadoPorPin(pin) {
-    const [empleados] = await db.query(`
+async function obtenerEmpleadoPorPin(connection, pin) {
+    const [empleados] = await connection.query(`
         SELECT 
             e.idEmpleado,
             e.numeroEmpleado,
@@ -35,7 +35,7 @@ async function obtenerEmpleadoPorPin(pin) {
     return empleados.length ? empleados[0] : null;
 }
 
-async function esDiaLaboral(idHorario, now) {
+async function esDiaLaboral(connection, idHorario, now) {
 
     const diasSemana = [
         'DOMINGO',
@@ -49,7 +49,7 @@ async function esDiaLaboral(idHorario, now) {
 
     const diaActual = diasSemana[now.getDay()];
 
-    const [dias] = await db.query(`
+    const [dias] = await connection.query(`
         SELECT 1
         FROM horario_dias
         WHERE idHorario = ?
@@ -61,8 +61,8 @@ async function esDiaLaboral(idHorario, now) {
 }
 
 // Validar tipo de resgistro Entrada/Salida
-async function verificarTipoRegistro(idEmpleado, fechaHoy) {
-    const [registros] = await db.query(`
+async function verificarTipoRegistro(connection, idEmpleado, fechaHoy) {
+    const [registros] = await connection.query(`
         SELECT tipoRegistro 
         FROM asistencias 
         WHERE idEmpleado = ? AND fecha = ?
@@ -92,19 +92,19 @@ function evaluarPuntualidad(horaEntrada, toleranciaMinutos, now) {
 }
 
 // Registro de asistencia
-async function registrarAsistencia(empleado, tipoRegistro, now) {
+async function registrarAsistencia(connection, empleado, tipoRegistro, now) {
     const fechaHoy = obtenerFechaLocal(now);
     const horaActual = obtenerHoraLocal(now);
 
     // Insert en asistencias
-    const [result] = await db.query(`
+    const [result] = await connection.query(`
         INSERT INTO asistencias 
         (idEmpleado, tipoRegistro, fecha, hora)
         VALUES (?, ?, ?, ?)
     `, [empleado.idEmpleado, tipoRegistro, fechaHoy, horaActual]);
 
     // Insert en historial
-    await db.query(`
+    await connection.query(`
         INSERT INTO asistencias_historial 
         (idEmpleado, nombreEmpleado, numeroEmpleado, propiedad, area, 
          tipoRegistro, fecha, hora)
@@ -129,26 +129,34 @@ export const validarPin = async (req, res) => {
     const { pin } = req.body;
     const now = new Date();
     const fechaHoy = obtenerFechaLocal(now);
+    const connection = await db.getConnection();
 
     try {
 
-        const empleado = await obtenerEmpleadoPorPin(pin);
+        await connection.beginTransaction();
+
+        const empleado = await obtenerEmpleadoPorPin(connection, pin);
 
         if (!empleado) {
+            await connection.rollback();
+            connection.release();
             return res.status(404).json({
                 success: false,
                 message: "PIN no encontrado"
             });
         }
 
-        const esLaboral = await esDiaLaboral(empleado.idHorario, now);
+        const esLaboral = await esDiaLaboral(connection, empleado.idHorario, now);
 
         const tipoRegistro = await verificarTipoRegistro(
+            connection,
             empleado.idEmpleado,
             fechaHoy
         );
 
         if (tipoRegistro === "ERROR_YA_SALIDA") {
+            await connection.rollback();
+            connection.release();
             return res.status(400).json({
                 success: false,
                 message: "Ya registraste tu salida hoy"
@@ -156,6 +164,8 @@ export const validarPin = async (req, res) => {
         }
 
         if (tipoRegistro === "ERROR_COMPLETO") {
+            await connection.rollback();
+            connection.release();
             return res.status(400).json({
                 success: false,
                 message: "Registro completo del día"
@@ -172,14 +182,14 @@ export const validarPin = async (req, res) => {
             if (!esLaboral) {
 
                 // Día NO laboral → EXTEMPORANEO
-                await db.query(`
+                await connection.query(`
                     DELETE FROM incidencias
                     WHERE idEmpleado = ?
                     AND fecha = CURDATE()
                     AND tipoIncidencia = 'FALTA'
                 `, [empleado.idEmpleado]);
 
-                await db.query(`
+                await connection.query(`
                     INSERT INTO incidencias
                     (idEmpleado, tipoIncidencia, fecha, justificada)
                     VALUES (?, 'EXTEMPORANEO', CURDATE(), 0)
@@ -203,14 +213,14 @@ export const validarPin = async (req, res) => {
                 if (now > horaSalida) {
 
                     // Llegó después de salida → EXTEMPORANEO
-                    await db.query(`
+                    await connection.query(`
                         DELETE FROM incidencias
                         WHERE idEmpleado = ?
                         AND fecha = CURDATE()
                         AND tipoIncidencia = 'FALTA'
                     `, [empleado.idEmpleado]);
 
-                    await db.query(`
+                    await connection.query(`
                         INSERT INTO incidencias
                         (idEmpleado, tipoIncidencia, fecha, justificada)
                         VALUES (?, 'EXTEMPORANEO', CURDATE(), 0)
@@ -220,7 +230,7 @@ export const validarPin = async (req, res) => {
 
                 } else if (puntualidad === "RETARDO") {
 
-                    await db.query(`
+                    await connection.query(`
                         INSERT INTO incidencias
                         (idEmpleado, tipoIncidencia, fecha, justificada)
                         VALUES (?, 'RETARDO', CURDATE(), 0)
@@ -235,10 +245,13 @@ export const validarPin = async (req, res) => {
         }
 
         const idAsistencia = await registrarAsistencia(
+            connection,
             empleado,
             tipoRegistro,
             now
         );
+
+        await connection.commit();
 
         return res.json({
             success: true,
@@ -251,24 +264,31 @@ export const validarPin = async (req, res) => {
         });
 
     } catch (error) {
+        await connection.rollback();
         console.error(error);
         res.status(500).json({
             success: false,
             message: "Error procesando asistencia"
         });
+    } finally {
+        connection.release();
     }
 };
 
 export const subirFoto = async (req, res) => {
     const { idAsistencia, rutaFoto, imagenBase64 } = req.body;
+    const connection = await db.getConnection();
 
     try {
         if (!idAsistencia || !imagenBase64) {
+            connection.release();
             return res.status(400).json({
                 success: false,
                 message: "Faltan datos para guardar la foto"
             });
         }
+
+        await connection.beginTransaction();
 
         // Carpeta donde se guardarán en el servidor
         const carpeta = "C:/servidor_fotos";
@@ -286,14 +306,14 @@ export const subirFoto = async (req, res) => {
         fs.writeFileSync(rutaServidor, buffer);
 
         // UPDATE en tabla asistencias
-        await db.query(`
+        await connection.query(`
             UPDATE asistencias
             SET fotografia = ?
             WHERE idAsistencia = ?
         `, [rutaServidor, idAsistencia]);
 
         // UPDATE en historial también
-        await db.query(`
+        await connection.query(`
             UPDATE asistencias_historial
             SET fotografia = ?
             WHERE idEmpleado = (
@@ -302,6 +322,8 @@ export const subirFoto = async (req, res) => {
             AND fecha = CURDATE()
         `, [rutaServidor, idAsistencia]);
 
+        await connection.commit();
+
         res.json({
             success: true,
             message: "Foto guardada correctamente",
@@ -309,11 +331,14 @@ export const subirFoto = async (req, res) => {
         });
 
     } catch (error) {
+        await connection.rollback();
         console.error(error);
         res.status(500).json({
             success: false,
             message: "Error al guardar la foto"
         });
+    } finally {
+        connection.release();
     }
 };
 
