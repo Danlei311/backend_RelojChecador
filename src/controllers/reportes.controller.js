@@ -126,8 +126,44 @@ export const obtenerReportesAsistencia = async (req, res) => {
                 ah.fotografia,
                 CASE 
                     WHEN i.tipoIncidencia = 'RETARDO' THEN COALESCE(i.justificada, 0)
+                    WHEN i.tipoIncidencia = 'EXTEMPORANEO' THEN COALESCE(i.justificada, 0)
                     ELSE 0
-                END AS justificada
+                END AS justificada,
+
+                -- Calcular horas trabajadas
+                CASE
+                    WHEN a_salida.hora IS NOT NULL AND a.hora IS NOT NULL
+                    THEN TIME_FORMAT(TIMEDIFF(a_salida.hora, a.hora), '%H:%i')
+                    ELSE 'N/A'
+                END AS horasTrabajadas,
+
+                -- Calcular cumplimiento
+                CASE
+                    -- Extemporáneo (día no laboral o fuera de horario)
+                    WHEN i.tipoIncidencia = 'EXTEMPORANEO' THEN 'Extemporáneo - Revisar'
+                    
+                    -- Sin entrada
+                    WHEN a.hora IS NULL THEN 'Falta - Sin registro'
+                    
+                    -- Sin salida
+                    WHEN a_salida.hora IS NULL THEN 'Sin registro de salida'
+                    
+                    -- Calcular diferencia real vs esperada (con tolerancia)
+                    WHEN TIME_TO_SEC(TIMEDIFF(a_salida.hora, a.hora)) >= 
+                        (TIME_TO_SEC(TIMEDIFF(h.horaSalida, h.horaEntrada)) - (h.toleranciaMinutos * 60))
+                    THEN 'Jornada completa'
+                    
+                    -- Faltó tiempo
+                    ELSE CONCAT('Faltaron ', 
+                        TIME_FORMAT(
+                            TIMEDIFF(
+                                TIMEDIFF(h.horaSalida, h.horaEntrada),
+                                TIMEDIFF(a_salida.hora, a.hora)
+                            ), 
+                            '%H:%i'
+                        ),
+                        ' horas')
+                END AS cumplimiento
 
             FROM asistencias_historial ah
 
@@ -170,11 +206,10 @@ export const obtenerReportesAsistencia = async (req, res) => {
             UNION ALL
 
             /* =========================
-               REGISTROS DE FALTAS
+            REGISTROS DE FALTAS
             ========================== */
 
             SELECT
-
                 i.fecha,
                 e.numeroEmpleado,
                 CONCAT(e.nombre,' ',e.apellidos) AS nombreEmpleado,
@@ -194,7 +229,13 @@ export const obtenerReportesAsistencia = async (req, res) => {
                 CASE 
                     WHEN i.justificada = 1 THEN 1
                     ELSE 0
-                END AS justificada
+                END AS justificada,
+
+                -- Horas trabajadas (no aplica para faltas)
+                'N/A' AS horasTrabajadas,
+
+                -- Cumplimiento para faltas
+                'Falta - Sin registro' AS cumplimiento
 
             FROM incidencias i
 
@@ -369,11 +410,13 @@ export const generarReportePDF = async (req, res) => {
             "Justificada",
             "Llegada",
             "Salida",
+            "Horas Trabajadas",
+            "Cumplimiento",
             "Foto"
         ];
 
         let columnWidths = [
-            70, 200, 120, 120, 70, 90, 60, 110, 70, 90, 90, 70
+            70, 200, 120, 120, 70, 90, 60, 110, 70, 90, 90, 100, 140, 70
         ];
 
         const printableWidth =
@@ -432,10 +475,12 @@ export const generarReportePDF = async (req, res) => {
                 r.tiempoRetardo,
                 r.falta,
                 r.extemporaneo,
-                r.justificada ? "Sí" : "No", // Justificada
+                r.justificada ? "Sí" : "No",
                 r.horaLlegada,
                 r.horaSalida,
-                r.fotografia ? "Sí" : "No"
+                r.horasTrabajadas || "N/A",
+                r.cumplimiento || "N/A",
+                r.idAsistencia ? "Sí" : "No"
             ];
 
             let rowHeight = baseRowHeight;
@@ -590,7 +635,7 @@ export const generarReporteExcel = async (req, res) => {
         sheet.getRow(2).height = 20;
         sheet.getRow(3).height = 20;
 
-        sheet.mergeCells(`A${rowIndex}:L${rowIndex}`);
+        sheet.mergeCells(`A${rowIndex}:N${rowIndex}`);
         sheet.getCell(`A${rowIndex}`).value = "REPORTE DE ASISTENCIAS";
         sheet.getCell(`A${rowIndex}`).font = { size: 16, bold: true };
         sheet.getCell(`A${rowIndex}`).alignment = { horizontal: "center" };
@@ -624,6 +669,8 @@ export const generarReporteExcel = async (req, res) => {
             "Justificada",
             "Llegada",
             "Salida",
+            "Horas Trabajadas",
+            "Cumplimiento",
             "Foto"
         ];
 
@@ -676,7 +723,7 @@ export const generarReporteExcel = async (req, res) => {
 
                 fechaActual = fecha;
 
-                sheet.mergeCells(`A${rowIndex}:L${rowIndex}`);
+                sheet.mergeCells(`A${rowIndex}:N${rowIndex}`);
 
                 const cell = sheet.getCell(`A${rowIndex}`);
 
@@ -703,7 +750,9 @@ export const generarReporteExcel = async (req, res) => {
                 r.justificada ? "Sí" : "No",
                 r.horaLlegada,
                 r.horaSalida,
-                r.fotografia ? "Sí" : "No"
+                r.horasTrabajadas || "N/A",
+                r.cumplimiento || "N/A",
+                r.idAsistencia ? "Sí" : "No"
             ];
 
             let color = "#b7f7c4"; // Verde: Asistencia correcta
@@ -771,6 +820,8 @@ export const generarReporteExcel = async (req, res) => {
             { width: 12 },  // Justificada
             { width: 15 },  // Llegada
             { width: 15 },  // Salida
+            { width: 15 },  // Horas Trabajadas
+            { width: 25 },  // Cumplimiento
             { width: 10 }   // Foto
         ];
 
@@ -866,11 +917,10 @@ const obtenerDatosReporte = async (req) => {
         SELECT * FROM (
 
             /* =========================
-               REGISTROS CON ASISTENCIA
+            REGISTROS CON ASISTENCIA
             ========================== */
 
             SELECT
-
                 ah.fecha,
                 ah.numeroEmpleado,
                 ah.nombreEmpleado,
@@ -907,8 +957,44 @@ const obtenerDatosReporte = async (req) => {
                 ah.fotografia,
                 CASE 
                     WHEN i.tipoIncidencia = 'RETARDO' THEN COALESCE(i.justificada, 0)
+                    WHEN i.tipoIncidencia = 'EXTEMPORANEO' THEN COALESCE(i.justificada, 0)
                     ELSE 0
-                END AS justificada
+                END AS justificada,
+
+                -- Calcular horas trabajadas
+                CASE
+                    WHEN a_salida.hora IS NOT NULL AND a.hora IS NOT NULL
+                    THEN TIME_FORMAT(TIMEDIFF(a_salida.hora, a.hora), '%H:%i')
+                    ELSE NULL
+                END AS horasTrabajadas,
+
+                -- Calcular cumplimiento
+                CASE
+                    -- Extemporáneo (día no laboral o fuera de horario)
+                    WHEN i.tipoIncidencia = 'EXTEMPORANEO' THEN 'Extemporáneo - Revisar'
+                    
+                    -- Sin entrada
+                    WHEN a.hora IS NULL THEN 'Falta - Sin registro'
+                    
+                    -- Sin salida
+                    WHEN a_salida.hora IS NULL THEN 'Sin registro de salida'
+                    
+                    -- Calcular diferencia real vs esperada (con tolerancia)
+                    WHEN TIME_TO_SEC(TIMEDIFF(a_salida.hora, a.hora)) >= 
+                        (TIME_TO_SEC(TIMEDIFF(h.horaSalida, h.horaEntrada)) - (h.toleranciaMinutos * 60))
+                    THEN 'Jornada completa'
+                    
+                    -- Faltó tiempo
+                    ELSE CONCAT('Faltaron ', 
+                        TIME_FORMAT(
+                            TIMEDIFF(
+                                TIMEDIFF(h.horaSalida, h.horaEntrada),
+                                TIMEDIFF(a_salida.hora, a.hora)
+                            ), 
+                            '%H:%i'
+                        ),
+                        ' horas')
+                END AS cumplimiento
 
             FROM asistencias_historial ah
 
@@ -955,7 +1041,6 @@ const obtenerDatosReporte = async (req) => {
             ========================== */
 
             SELECT
-
                 i.fecha,
                 e.numeroEmpleado,
                 CONCAT(e.nombre,' ',e.apellidos) AS nombreEmpleado,
@@ -972,7 +1057,13 @@ const obtenerDatosReporte = async (req) => {
 
                 NULL AS idAsistencia,
                 NULL AS fotografia,
-                i.justificada
+                i.justificada,
+
+                -- Horas trabajadas (no aplica para faltas)
+                NULL AS horasTrabajadas,
+
+                -- Cumplimiento para faltas
+                'Falta - Sin registro' AS cumplimiento
 
             FROM incidencias i
 
